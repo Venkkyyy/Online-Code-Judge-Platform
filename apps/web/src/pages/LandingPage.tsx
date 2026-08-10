@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 
 // ── 5 rotating code problems ──────────────────────────────────────────────────
 const CODE_EXAMPLES: Array<{
@@ -278,6 +279,7 @@ function ProblemRow({ id, title, difficulty, tags, acceptanceRate }: {
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 function Navbar() {
+  const { user, signOut } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20)
@@ -296,14 +298,26 @@ function Navbar() {
           </div>
           Code<span style={{ color: '#60A5FA' }}>Judge</span>
         </Link>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, fontSize: '0.875rem', fontWeight: 600 }}>
           {['Problems', 'Leaderboard', 'Discuss'].map(item => (
             <Link key={item} to={`/${item.toLowerCase()}`} className="btn-nav-link">{item}</Link>
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Link to="/signin" className="btn-nav-signin">Sign In</Link>
-          <Link to="/register" className="btn-nav-getstarted">Get Started</Link>
+          {user ? (
+            <>
+              <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginRight: 8 }}>
+                {user.displayName || user.email}
+              </div>
+              <button onClick={() => signOut()} className="btn-nav-signin" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>Sign Out</button>
+              <Link to="/problems" className="btn-nav-getstarted">Workspace</Link>
+            </>
+          ) : (
+            <>
+              <Link to="/signin" className="btn-nav-signin">Sign In</Link>
+              <Link to="/register" className="btn-nav-getstarted">Get Started</Link>
+            </>
+          )}
         </div>
       </div>
     </nav>

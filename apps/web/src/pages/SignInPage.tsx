@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../lib/firebase'
 
 // Left brand panel shown on auth pages
 function BrandPanel() {
@@ -133,15 +135,21 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-    setTimeout(() => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      navigate('/problems')
+    } catch (err: any) {
+      console.error(err)
+      setError('Invalid email or password.')
+    } finally {
       setIsLoading(false)
-      setError('Firebase authentication will be connected in Phase 1. The UI is ready!')
-    }, 1000)
+    }
   }
 
   return (

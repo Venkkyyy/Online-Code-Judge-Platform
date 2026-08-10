@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { auth } from '../lib/firebase'
 
 function BrandPanel() {
   return (
@@ -136,6 +138,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [step, setStep] = useState(1) // 1 = name/email, 2 = password
+  const navigate = useNavigate()
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }))
@@ -156,10 +159,16 @@ export default function RegisterPage() {
     if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
     if (form.password.length < 12) { setError('Password must be at least 12 characters.'); return }
     setIsLoading(true); setError('')
-    setTimeout(() => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, form.email, form.password)
+      await updateProfile(userCredential.user, { displayName: form.displayName })
+      navigate('/problems')
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Failed to create account.')
+    } finally {
       setIsLoading(false)
-      setError('Firebase authentication will be connected in Phase 1. The UI is ready!')
-    }, 1000)
+    }
   }
 
   return (
