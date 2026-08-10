@@ -1,0 +1,26 @@
+{
+  "name": "online-code-judge",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Online Code Judge Platform — secure, developer-focused competitive programming platform",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:web": "pnpm --filter @ocj/web dev",
+    "dev:api": "pnpm --filter @ocj/api dev",
+    "build": "pnpm --filter './apps/*' build",
+    "lint": "pnpm --recursive lint",
+    "typecheck": "pnpm --recursive typecheck",
+    "test": "pnpm --recursive test",
+    "migrate": "pnpm --filter @ocj/api migrate",
+    "migrate:create": "pnpm --filter @ocj/api migrate:create",
+    "clean": "pnpm --recursive --parallel exec rimraf dist .turbo node_modules"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.10",
+    "typescript": "^5.8.3"
+  }
+}
