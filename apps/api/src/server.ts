@@ -17,7 +17,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => callback(null, true),
+    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : (origin, callback) => callback(null, true),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
   }
@@ -67,10 +67,14 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: (origin, callback) => callback(null, true),
+  origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : (origin, callback) => callback(null, true),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -438,9 +442,9 @@ router.get('/users/profile', authMiddleware, async (req: any, res) => {
     const acceptanceRate = totalSubmissions > 0 ? ((acceptedSubmissions / totalSubmissions) * 100).toFixed(1) : 0;
     
     const difficultyBreakdown = {
-      Easy: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'easy').length,
-      Medium: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'medium').length,
-      Hard: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'hard').length
+      Easy: uniqueProblemsSolvedResult.filter((s: any) => s.problem.difficulty.toLowerCase() === 'easy').length,
+      Medium: uniqueProblemsSolvedResult.filter((s: any) => s.problem.difficulty.toLowerCase() === 'medium').length,
+      Hard: uniqueProblemsSolvedResult.filter((s: any) => s.problem.difficulty.toLowerCase() === 'hard').length
     };
     
     // Total published problems by difficulty
