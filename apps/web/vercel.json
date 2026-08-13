@@ -1,8 +1,28 @@
 {
-    "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/index.html"
-        }
-    ]
+  "rewrites": [
+    {
+      "source": "/signin",
+      "destination": "/"
+    },
+    {
+      "source": "/register",
+      "destination": "/"
+    },
+    {
+      "source": "/problems",
+      "destination": "/"
+    },
+    {
+      "source": "/profile",
+      "destination": "/"
+    },
+    {
+      "source": "/admin",
+      "destination": "/"
+    },
+    {
+      "source": "/problems/:path*",
+      "destination": "/"
+    }
+  ]
 }
