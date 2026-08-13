@@ -1,6 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { useEffect, useState } from 'react'
+import {
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithRedirect,
+  getRedirectResult,
+} from 'firebase/auth'
 import { auth } from '../lib/firebase'
 
 // Left brand panel shown on auth pages
@@ -133,37 +138,82 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+
   const navigate = useNavigate()
 
+  useEffect(() => {
+    let mounted = true
+
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+
+        if (result?.user && mounted) {
+          navigate('/problems', { replace: true })
+        }
+      } catch (err: any) {
+        console.error('Google redirect sign-in error:', err)
+
+        if (mounted) {
+          setError(
+            err?.code === 'auth/unauthorized-domain'
+              ? 'This domain is not authorized in Firebase.'
+              : err?.message || 'Google Sign-In failed.'
+          )
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    checkRedirectResult()
+
+    return () => {
+      mounted = false
+    }
+  }, [navigate])
+
+  // ADD THIS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError('')
+
     try {
       await signInWithEmailAndPassword(auth, email, password)
       navigate('/problems')
     } catch (err: any) {
-      console.error(err)
+      console.error('Email sign-in error:', err)
+
+      setError(
+        err?.message || 'Invalid email or password.'
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleGoogleSignIn = async () => {
-    setIsLoading(true)
-    setError('')
     try {
+      setIsLoading(true)
+      setError('')
+
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-      navigate('/problems')
+
+      provider.setCustomParameters({
+        prompt: 'select_account',
+      })
+
+      await signInWithRedirect(auth, provider)
     } catch (err: any) {
-      console.error(err)
-      setError('Google Sign-In failed.')
-    } finally {
+      console.error('Google Sign-In error:', err)
+
+      setError(err?.message || 'Google Sign-In failed.')
       setIsLoading(false)
     }
   }
-
   return (
     <div style={{
       minHeight: '100vh', display: 'grid',

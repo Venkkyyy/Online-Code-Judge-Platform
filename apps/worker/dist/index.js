@@ -14,13 +14,14 @@ const redisConnection = new ioredis_1.default(process.env.REDIS_URL || 'redis://
 });
 async function processSubmission(job) {
     const { submissionId } = job.data;
+    const mode = job.data.mode === 'RUN' ? 'RUN' : 'SUBMIT';
     console.log(`[Worker] Processing submission: ${submissionId}`);
     // Fetch submission and related problem testcases
     const submission = await db_1.default.submission.findUnique({
         where: { id: submissionId },
         include: {
             problem: {
-                include: { testCases: true }
+                include: { testCases: { where: mode === 'RUN' ? { isHidden: false } : {}, orderBy: { id: 'asc' } } }
             }
         }
     });

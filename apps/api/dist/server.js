@@ -20,7 +20,7 @@ const app = (0, express_1.default)();
 const httpServer = (0, http_1.createServer)(app);
 const io = new socket_io_1.Server(httpServer, {
     cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+        origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : (origin, callback) => callback(null, true),
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         credentials: true
     }
@@ -62,17 +62,20 @@ app.use((0, helmet_1.default)({
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
 }));
-const limiter = (0, express_rate_limit_1.default)({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
-});
-app.use(limiter);
 app.use((0, cors_1.default)({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : (origin, callback) => callback(null, true),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
 }));
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+const limiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 1000, // limit each IP to 1000 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.'
+});
+app.use(limiter);
 app.use(express_1.default.json({ limit: '256kb' }));
 // Routes
 const router = express_1.default.Router();
@@ -92,10 +95,10 @@ async function createJudgement(req, res, mode) {
             return res.status(404).json({ error: 'Problem not found' });
         await db_1.default.user.upsert({
             where: { id: req.user.uid },
-            update: {},
+            update: { email: req.user.email || `unknown-${req.user.uid}@example.com` },
             create: {
                 id: req.user.uid,
-                email: req.user.email || 'unknown@example.com',
+                email: req.user.email || `unknown-${req.user.uid}@example.com`,
                 role: 'USER'
             }
         });
@@ -105,7 +108,8 @@ async function createJudgement(req, res, mode) {
                 problemId: parsedProblemId,
                 language,
                 code,
-                status: 'QUEUED'
+                status: 'QUEUED',
+                isRun: mode === 'RUN'
             }
         });
         await (0, queue_1.enqueueSubmission)(submission.id, mode);
@@ -120,9 +124,21 @@ router.get('/problems', async (req, res) => {
     try {
         const problems = await db_1.default.problem.findMany({
             where: { published: true },
-            orderBy: { id: 'asc' }
+            orderBy: { id: 'asc' },
+            include: {
+                _count: { select: { submissions: { where: { isRun: false } } } }
+            }
         });
-        res.json(problems);
+        // Compute acceptance rate for each problem
+        const problemsWithRate = await Promise.all(problems.map(async (p) => {
+            const total = p._count.submissions;
+            const accepted = total > 0
+                ? await db_1.default.submission.count({ where: { problemId: p.id, status: 'ACCEPTED', isRun: false } })
+                : 0;
+            const { _count, ...rest } = p;
+            return { ...rest, totalSubmissions: total, acceptedSubmissions: accepted, acceptance: total > 0 ? parseFloat(((accepted / total) * 100).toFixed(1)) : 0 };
+        }));
+        res.json(problemsWithRate);
     }
     catch (error) {
         console.error('Failed to fetch problems:', error);
@@ -183,6 +199,26 @@ router.get('/submissions/:id', auth_1.authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'Not found' });
         let beatsRuntime = 0;
         let beatsMemory = 0;
+        let runtimeDistribution = [];
+        let memoryDistribution = [];
+        function generateMockDistribution(userValue, unit) {
+            const dist = [];
+            const min = Math.max(1, userValue * 0.2);
+            const max = userValue * 2.5;
+            const step = (max - min) / 40;
+            const peak = min + (max - min) * 0.4;
+            const variance = (max - min) / 5;
+            for (let i = 0; i < 40; i++) {
+                const val = min + i * step;
+                const height = Math.exp(-Math.pow(val - peak, 2) / (2 * Math.pow(variance, 2)));
+                const count = Math.floor(height * 100 * (0.8 + Math.random() * 0.4));
+                dist.push({
+                    mark: val.toFixed(0) + unit,
+                    count: Math.max(1, count)
+                });
+            }
+            return dist;
+        }
         if (submission.status === 'ACCEPTED') {
             const totalAccepted = await db_1.default.submission.count({
                 where: { problemId: submission.problemId, status: 'ACCEPTED' }
@@ -209,11 +245,15 @@ router.get('/submissions/:id', auth_1.authMiddleware, async (req, res) => {
                 beatsRuntime = 100;
                 beatsMemory = 100;
             }
+            runtimeDistribution = generateMockDistribution(submission.executionTime || 50, 'ms');
+            memoryDistribution = generateMockDistribution(submission.memoryUsed || 20, 'MB');
         }
         res.json({
             ...submission,
             beatsRuntime: beatsRuntime.toFixed(1),
-            beatsMemory: beatsMemory.toFixed(1)
+            beatsMemory: beatsMemory.toFixed(1),
+            runtimeDistribution,
+            memoryDistribution
         });
     }
     catch (error) {
@@ -312,6 +352,29 @@ router.get('/admin/stats', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+router.get('/admin/recent-submissions', auth_1.authMiddleware, async (req, res) => {
+    try {
+        const user = await db_1.default.user.findUnique({ where: { id: req.user.uid } });
+        const isDev = process.env.NODE_ENV !== 'production';
+        if (!isDev && (!user || (user.role !== 'ADMIN' && user.role !== 'PROBLEM_SETTER'))) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        const submissions = await db_1.default.submission.findMany({
+            where: { isRun: false },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+            include: {
+                problem: { select: { title: true } },
+                user: { select: { email: true } }
+            }
+        });
+        res.json(submissions);
+    }
+    catch (error) {
+        console.error('Failed to fetch recent submissions:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 router.get('/admin/problems', async (req, res) => {
     try {
         const problems = await db_1.default.problem.findMany({
@@ -329,10 +392,10 @@ router.get('/admin/problems', async (req, res) => {
 router.get('/users/profile', auth_1.authMiddleware, async (req, res) => {
     try {
         const totalSubmissions = await db_1.default.submission.count({
-            where: { userId: req.user.uid }
+            where: { userId: req.user.uid, isRun: false }
         });
         const acceptedSubmissions = await db_1.default.submission.count({
-            where: { userId: req.user.uid, status: 'ACCEPTED' }
+            where: { userId: req.user.uid, status: 'ACCEPTED', isRun: false }
         });
         const uniqueProblemsSolvedResult = await db_1.default.submission.findMany({
             where: { userId: req.user.uid, status: 'ACCEPTED' },
@@ -345,9 +408,9 @@ router.get('/users/profile', auth_1.authMiddleware, async (req, res) => {
         const problemsSolved = uniqueProblemsSolvedResult.length;
         const acceptanceRate = totalSubmissions > 0 ? ((acceptedSubmissions / totalSubmissions) * 100).toFixed(1) : 0;
         const difficultyBreakdown = {
-            Easy: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'easy').length,
-            Medium: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'medium').length,
-            Hard: uniqueProblemsSolvedResult.filter(s => s.problem.difficulty.toLowerCase() === 'hard').length
+            Easy: uniqueProblemsSolvedResult.filter((s) => s.problem.difficulty.toLowerCase() === 'easy').length,
+            Medium: uniqueProblemsSolvedResult.filter((s) => s.problem.difficulty.toLowerCase() === 'medium').length,
+            Hard: uniqueProblemsSolvedResult.filter((s) => s.problem.difficulty.toLowerCase() === 'hard').length
         };
         // Total published problems by difficulty
         const totalByDifficulty = {
@@ -372,9 +435,9 @@ router.get('/users/profile', auth_1.authMiddleware, async (req, res) => {
 router.get('/users/submissions', auth_1.authMiddleware, async (req, res) => {
     try {
         const submissions = await db_1.default.submission.findMany({
-            where: { userId: req.user.uid },
+            where: { userId: req.user.uid, isRun: false },
             orderBy: { createdAt: 'desc' },
-            take: 20,
+            take: 50,
             include: {
                 problem: {
                     select: { title: true }
@@ -388,6 +451,28 @@ router.get('/users/submissions', auth_1.authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// Activity heatmap — count of submissions per day for last 365 days
+router.get('/users/activity', auth_1.authMiddleware, async (req, res) => {
+    try {
+        const since = new Date();
+        since.setFullYear(since.getFullYear() - 1);
+        const subs = await db_1.default.submission.findMany({
+            where: { userId: req.user.uid, isRun: false, createdAt: { gte: since } },
+            select: { createdAt: true }
+        });
+        // Aggregate by date string (YYYY-MM-DD)
+        const counts = {};
+        for (const s of subs) {
+            const dateKey = s.createdAt.toISOString().slice(0, 10);
+            counts[dateKey] = (counts[dateKey] || 0) + 1;
+        }
+        res.json(counts);
+    }
+    catch (error) {
+        console.error('Failed to fetch user activity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 // ── Collab Sessions ──────────────────────────────────────────────────────────
 const generatePassword = () => Math.random().toString(36).slice(-6).toUpperCase();
 router.post('/collab/create', auth_1.authMiddleware, async (req, res) => {
@@ -396,8 +481,10 @@ router.post('/collab/create', auth_1.authMiddleware, async (req, res) => {
         if (!problemId)
             return res.status(400).json({ error: 'problemId is required' });
         const password = generatePassword();
+        const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
         const session = await db_1.default.collabSession.create({
             data: {
+                id: sessionId,
                 problemId: Number(problemId),
                 password,
                 hostId: req.user.uid
@@ -446,7 +533,7 @@ app.get('/health/ready', async (_req, res) => {
         res.status(503).json({ status: 'not_ready' });
     }
 });
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`API Server running on port ${PORT} with WebRTC Signaling`);
 });
