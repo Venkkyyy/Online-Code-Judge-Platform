@@ -2,50 +2,23 @@ import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-// ── Problem data (30 realistic problems) ─────────────────────────────────────
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
+
 interface Problem {
   id: number
   title: string
   difficulty: 'Easy' | 'Medium' | 'Hard'
   tags: string[]
   acceptance: number
-  solved?: boolean // will be driven by auth later
+  solved?: boolean
 }
 
-const ALL_PROBLEMS: Problem[] = [
-  { id: 1,  title: 'Two Sum',                                     difficulty: 'Easy',   tags: ['Array', 'Hash Table'],             acceptance: 52.1 },
-  { id: 2,  title: 'Add Two Numbers',                              difficulty: 'Medium', tags: ['Linked List', 'Math'],             acceptance: 41.3 },
-  { id: 3,  title: 'Longest Substring Without Repeating Characters', difficulty: 'Medium', tags: ['Sliding Window', 'String'],    acceptance: 35.8 },
-  { id: 4,  title: 'Median of Two Sorted Arrays',                  difficulty: 'Hard',   tags: ['Binary Search', 'Array'],          acceptance: 38.4 },
-  { id: 5,  title: 'Longest Palindromic Substring',                difficulty: 'Medium', tags: ['DP', 'String'],                    acceptance: 33.2 },
-  { id: 6,  title: 'Valid Parentheses',                            difficulty: 'Easy',   tags: ['Stack', 'String'],                 acceptance: 67.4 },
-  { id: 7,  title: 'Merge Two Sorted Lists',                       difficulty: 'Easy',   tags: ['Linked List', 'Recursion'],        acceptance: 63.8 },
-  { id: 8,  title: 'Maximum Subarray',                             difficulty: 'Medium', tags: ['Array', 'DP'],                     acceptance: 50.1 },
-  { id: 9,  title: 'Climbing Stairs',                              difficulty: 'Easy',   tags: ['Math', 'DP'],                      acceptance: 71.2 },
-  { id: 10, title: 'Binary Search',                                difficulty: 'Easy',   tags: ['Array', 'Binary Search'],          acceptance: 59.3 },
-  { id: 11, title: 'Reverse Linked List',                          difficulty: 'Easy',   tags: ['Linked List', 'Recursion'],        acceptance: 74.5 },
-  { id: 12, title: 'Container With Most Water',                    difficulty: 'Medium', tags: ['Array', 'Two Pointers'],           acceptance: 54.2 },
-  { id: 13, title: 'Three Sum',                                    difficulty: 'Medium', tags: ['Array', 'Two Pointers'],           acceptance: 32.7 },
-  { id: 14, title: 'Letter Combinations of a Phone Number',        difficulty: 'Medium', tags: ['Backtracking', 'String'],          acceptance: 57.8 },
-  { id: 15, title: 'Remove Nth Node From End of List',             difficulty: 'Medium', tags: ['Linked List', 'Two Pointers'],     acceptance: 43.1 },
-  { id: 16, title: 'Trapping Rain Water',                          difficulty: 'Hard',   tags: ['Array', 'Two Pointers', 'Stack'],  acceptance: 60.5 },
-  { id: 17, title: 'Word Search',                                  difficulty: 'Medium', tags: ['Backtracking', 'Graph'],           acceptance: 40.2 },
-  { id: 18, title: 'Maximum Depth of Binary Tree',                 difficulty: 'Easy',   tags: ['Tree', 'DFS', 'BFS'],              acceptance: 74.9 },
-  { id: 19, title: 'Validate Binary Search Tree',                  difficulty: 'Medium', tags: ['Tree', 'DFS'],                    acceptance: 31.8 },
-  { id: 20, title: 'Number of Islands',                            difficulty: 'Medium', tags: ['Graph', 'BFS', 'DFS'],             acceptance: 56.7 },
-  { id: 21, title: 'Course Schedule',                              difficulty: 'Medium', tags: ['Graph', 'Topological Sort'],       acceptance: 45.3 },
-  { id: 22, title: 'Coin Change',                                  difficulty: 'Medium', tags: ['DP', 'BFS'],                      acceptance: 43.6 },
-  { id: 23, title: 'Longest Common Subsequence',                   difficulty: 'Medium', tags: ['DP', 'String'],                   acceptance: 57.1 },
-  { id: 24, title: 'Find Minimum in Rotated Sorted Array',         difficulty: 'Medium', tags: ['Array', 'Binary Search'],         acceptance: 49.8 },
-  { id: 25, title: 'Merge k Sorted Lists',                         difficulty: 'Hard',   tags: ['Linked List', 'Heap'],             acceptance: 49.1 },
-  { id: 26, title: 'Serialize and Deserialize Binary Tree',        difficulty: 'Hard',   tags: ['Tree', 'Design'],                 acceptance: 55.3 },
-  { id: 27, title: 'Sliding Window Maximum',                       difficulty: 'Hard',   tags: ['Sliding Window', 'Heap'],          acceptance: 46.2 },
-  { id: 28, title: 'Regular Expression Matching',                  difficulty: 'Hard',   tags: ['DP', 'String', 'Recursion'],       acceptance: 28.3 },
-  { id: 29, title: 'Palindrome Partitioning',                      difficulty: 'Medium', tags: ['DP', 'Backtracking'],              acceptance: 65.4 },
-  { id: 30, title: 'Decode Ways',                                  difficulty: 'Medium', tags: ['DP', 'String'],                   acceptance: 31.1 },
-]
+type ApiProblem = Partial<Problem> & {
+  id: number
+  title?: string
+  question?: string
+}
 
-const ALL_TAGS = Array.from(new Set(ALL_PROBLEMS.flatMap(p => p.tags))).sort()
 const PAGE_SIZE = 15
 
 // ── Difficulty helpers ────────────────────────────────────────────────────────
@@ -60,7 +33,7 @@ function acceptColor(rate: number) {
   return '#F43F5E'
 }
 
-// ── CursorGlow (same as landing page) ────────────────────────────────────────
+// ── CursorGlow ────────────────────────────────────────────────────────────────
 function CursorGlow() {
   const coreRef = useRef<HTMLDivElement>(null)
   const haloRef = useRef<HTMLDivElement>(null)
@@ -104,7 +77,7 @@ function CursorGlow() {
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 function Navbar({ query, setQuery }: { query: string; setQuery: (v: string) => void }) {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 10)
@@ -112,9 +85,8 @@ function Navbar({ query, setQuery }: { query: string; setQuery: (v: string) => v
     return () => window.removeEventListener('scroll', fn)
   }, [])
   return (
-    <nav style={{ position: 'sticky', top: 0, zIndex: 100, height: 60, display: 'flex', alignItems: 'center', background: scrolled ? 'rgba(11,16,32,0.97)' : 'rgba(11,16,32,0.8)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderBottom: `1px solid ${scrolled ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)'}`, transition: 'all 0.3s ease' }}>
+    <nav className="liquid-nav" style={{ position: 'sticky', top: 0, zIndex: 100, height: 60, display: 'flex', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1280, margin: '0 auto', padding: '0 var(--space-6)', gap: 16 }}>
-        {/* Logo */}
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: '1.125rem', color: 'white', textDecoration: 'none', letterSpacing: '-0.03em', flexShrink: 0 }}>
           <div style={{ width: 28, height: 28, borderRadius: 7, background: 'linear-gradient(135deg,rgba(59,130,246,0.3),rgba(20,184,166,0.2))', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
@@ -124,8 +96,6 @@ function Navbar({ query, setQuery }: { query: string; setQuery: (v: string) => v
           </div>
           Code<span style={{ color: '#60A5FA' }}>Judge</span>
         </Link>
-
-        {/* Search bar — center */}
         <div style={{ flex: 1, maxWidth: 480, position: 'relative' }}>
           <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input
@@ -133,37 +103,28 @@ function Navbar({ query, setQuery }: { query: string; setQuery: (v: string) => v
             placeholder="Search problems..."
             value={query}
             onChange={e => setQuery(e.target.value)}
+            className="liquid-input"
             style={{
-              width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              borderRadius: 'var(--radius-md)', padding: '8px 12px 8px 36px',
-              color: 'white', fontSize: '0.875rem', fontFamily: 'var(--font-ui)',
-              outline: 'none', transition: 'all 0.2s ease',
+              width: '100%', borderRadius: 'var(--radius-md)', padding: '8px 12px 8px 36px',
+              fontSize: '0.875rem', fontFamily: 'var(--font-ui)',
             }}
-            onFocus={e => { e.target.style.background = 'rgba(255,255,255,0.09)'; e.target.style.borderColor = 'rgba(59,130,246,0.5)' }}
-            onBlur={e => { e.target.style.background = 'rgba(255,255,255,0.06)'; e.target.style.borderColor = 'rgba(255,255,255,0.1)' }}
           />
-          {query && (
-            <button onClick={() => setQuery('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: 2 }}>×</button>
-          )}
         </div>
-
-        {/* Nav links + auth */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {['Problems', 'Leaderboard', 'Discuss'].map(item => (
-            <Link key={item} to={`/${item.toLowerCase()}`} className="btn-nav-link" style={{ color: item === 'Problems' ? '#60A5FA' : undefined }}>{item}</Link>
-          ))}
-          <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           {user ? (
             <>
-              <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginRight: 4 }}>
-                {user.displayName || user.email}
-              </div>
-              <button onClick={() => signOut()} className="btn-nav-signin" style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>Sign Out</button>
+              <Link to="/admin" style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem', textDecoration: 'none' }}>Admin</Link>
+              <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'white', textDecoration: 'none', background: 'rgba(255,255,255,0.05)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg,#3B82F6,#10B981)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 700 }}>
+                  {user.email?.[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize: '0.85rem' }}>Profile</span>
+              </Link>
             </>
           ) : (
             <>
-              <Link to="/signin" className="btn-nav-signin">Sign In</Link>
-              <Link to="/register" className="btn-nav-getstarted">Get Started</Link>
+              <Link to="/signin" style={{ color: 'white', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>Sign In</Link>
+              <Link to="/register" style={{ background: 'white', color: 'black', padding: '6px 16px', borderRadius: 20, textDecoration: 'none', fontSize: '0.9rem', fontWeight: 600 }}>Get Started</Link>
             </>
           )}
         </div>
@@ -174,20 +135,15 @@ function Navbar({ query, setQuery }: { query: string; setQuery: (v: string) => v
 
 // ── Tag pill ──────────────────────────────────────────────────────────────────
 function TagPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  const [hov, setHov] = useState(false)
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
       style={{
         padding: '4px 12px', borderRadius: 'var(--radius-full)',
-        border: `1px solid ${active ? 'rgba(59,130,246,0.6)' : hov ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.09)'}`,
-        background: active ? 'rgba(59,130,246,0.15)' : hov ? 'rgba(255,255,255,0.05)' : 'transparent',
-        color: active ? '#60A5FA' : hov ? 'white' : 'var(--color-text-secondary)',
-        fontSize: '0.78rem', fontWeight: active ? 600 : 500, cursor: 'pointer',
-        transition: 'all 0.18s ease', fontFamily: 'var(--font-ui)',
-        whiteSpace: 'nowrap',
+        border: `1px solid ${active ? 'rgba(59,130,246,0.6)' : 'rgba(255,255,255,0.09)'}`,
+        background: active ? 'rgba(59,130,246,0.15)' : 'transparent',
+        color: active ? '#60A5FA' : 'var(--color-text-secondary)',
+        fontSize: '0.78rem', cursor: 'pointer',
       }}
     >{label}</button>
   )
@@ -195,71 +151,47 @@ function TagPill({ label, active, onClick }: { label: string; active: boolean; o
 
 // ── Problem row ───────────────────────────────────────────────────────────────
 function ProblemRow({ problem, index }: { problem: Problem; index: number }) {
-  const [hov, setHov] = useState(false)
   const dc = DIFF_COLOR[problem.difficulty]
+  const diffClass = { Easy: 'liquid-glass-green', Medium: 'liquid-glass-amber', Hard: 'liquid-glass-rose' }[problem.difficulty]
   const color = acceptColor(problem.acceptance)
 
   return (
     <Link
       to={`/problems/${problem.id}`}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
+      className="liquid-glass-hover"
       style={{
         display: 'grid',
         gridTemplateColumns: '52px 1fr auto auto auto',
         gap: 0,
         alignItems: 'center',
         padding: '0 var(--space-5)',
-        height: 58,
-        background: hov ? 'rgba(59,130,246,0.04)' : index % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent',
+        height: 64,
         borderBottom: '1px solid rgba(255,255,255,0.04)',
-        cursor: 'pointer', textDecoration: 'none',
-        transition: 'all 0.15s ease',
-        transform: hov ? 'translateX(3px)' : 'none',
-        borderLeft: `2px solid ${hov ? dc : 'transparent'}`,
+        textDecoration: 'none',
+        borderLeft: `3px solid ${dc}`,
+        position: 'relative',
       }}
     >
-      {/* # */}
-      <span style={{ fontFamily: 'var(--font-code)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>
-        {problem.id}.
-      </span>
-
-      {/* Title + Tags */}
+      <span style={{ fontFamily: 'var(--font-code)', fontSize: '0.8rem', color: 'var(--color-text-tertiary)', paddingLeft: 4 }}>{problem.id}.</span>
       <div style={{ minWidth: 0, paddingRight: 24 }}>
-        <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: hov ? 'white' : 'var(--color-text-primary)', transition: 'color 0.15s', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>
-          {problem.title}
-        </div>
+        <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: 'white', marginBottom: 4 }}>{problem.title}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {problem.tags.map(t => (
-            <span key={t} style={{ padding: '1px 8px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.07)', fontSize: '0.68rem', color: 'var(--color-text-tertiary)', fontWeight: 500 }}>{t}</span>
-          ))}
+          {problem.tags.map(t => <span key={t} className="liquid-pill" style={{ fontSize: '0.65rem', color: 'var(--color-text-tertiary)', padding: '2px 8px' }}>{t}</span>)}
         </div>
       </div>
-
-      {/* Difficulty */}
       <div style={{ paddingRight: 40, minWidth: 90, textAlign: 'center' }}>
-        <span style={{ display: 'inline-block', padding: '3px 11px', borderRadius: 'var(--radius-full)', background: DIFF_BG[problem.difficulty], border: `1px solid ${DIFF_BORDER[problem.difficulty]}`, fontSize: '0.72rem', fontWeight: 700, color: dc, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {problem.difficulty}
-        </span>
+        <span className={`liquid-pill ${diffClass}`} style={{ color: dc, fontSize: '0.72rem', fontWeight: 700, padding: '3px 11px' }}>{problem.difficulty}</span>
       </div>
-
-      {/* Acceptance */}
       <div style={{ paddingRight: 32, minWidth: 110, textAlign: 'right' }}>
-        <div style={{ fontSize: '0.82rem', fontFamily: 'var(--font-code)', fontWeight: 600, color, marginBottom: 4 }}>
-          {problem.acceptance.toFixed(1)}%
-        </div>
-        <div style={{ height: 3, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${problem.acceptance}%`, background: color, borderRadius: 2, transition: 'width 0.4s ease' }} />
+        <div style={{ color, fontWeight: 600, fontFamily: 'var(--font-code)' }}>{problem.acceptance.toFixed(1)}%</div>
+        <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${problem.acceptance}%`, background: color, borderRadius: 3, transition: 'width 0.8s ease' }} />
         </div>
       </div>
-
-      {/* Status icon */}
       <div style={{ minWidth: 28, textAlign: 'center' }}>
-        {problem.solved ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#10B981"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        ) : (
-          <div style={{ width: 16, height: 16, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)', margin: '0 auto' }} />
-        )}
+        {problem.solved
+          ? <span style={{ color: '#10B981', fontSize: '1rem' }}>✓</span>
+          : <div style={{ width: 16, height: 16, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.15)', margin: '0 auto' }} />}
       </div>
     </Link>
   )
@@ -267,47 +199,96 @@ function ProblemRow({ problem, index }: { problem: Problem; index: number }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ProblemsPage() {
-  const [query, setQuery]       = useState('')
-  const [diff, setDiff]         = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All')
+  const [problems, setProblems] = useState<Problem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [diff, setDiff] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All')
   const [activeTags, setActiveTags] = useState<string[]>([])
-  const [sort, setSort]         = useState<'default' | 'acc-asc' | 'acc-desc' | 'diff-easy' | 'diff-hard'>('default')
-  const [page, setPage]         = useState(1)
   const [showTagMenu, setShowTagMenu] = useState(false)
+  const [sort, setSort] = useState('default')
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function loadProblems() {
+      try {
+        setLoading(true)
+        setError('')
+        const res = await fetch(`${API_URL}/problems`, { signal: controller.signal })
+
+        if (!res.ok) {
+          throw new Error('Problem catalogue could not be loaded.')
+        }
+
+        const data = await res.json()
+        if (!Array.isArray(data)) {
+          throw new Error('Problem catalogue returned an invalid response.')
+        }
+
+        setProblems(data.map((problem: ApiProblem) => ({
+          id: problem.id,
+          title: problem.title || problem.question || `Problem ${problem.id}`,
+          difficulty: problem.difficulty || 'Easy',
+          tags: Array.isArray(problem.tags) ? problem.tags : [],
+          acceptance: typeof problem.acceptance === 'number' ? problem.acceptance : 0,
+          solved: problem.solved,
+        })))
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error(err)
+          setError(err instanceof Error ? err.message : 'Problem catalogue could not be loaded.')
+          setProblems([])
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }
+
+    loadProblems()
+    return () => controller.abort()
+  }, [])
 
   // Reset page on filter change
   useEffect(() => setPage(1), [query, diff, activeTags, sort])
 
   const filtered = useMemo(() => {
-    let list = ALL_PROBLEMS
-    if (query.trim()) {
+    let list = [...problems]
+    if (query) {
       const q = query.toLowerCase()
-      list = list.filter(p => p.title.toLowerCase().includes(q) || p.tags.some(t => t.toLowerCase().includes(q)))
+      list = list.filter(p => String(p.id) === q || p.title.toLowerCase().includes(q))
     }
     if (diff !== 'All') list = list.filter(p => p.difficulty === diff)
     if (activeTags.length > 0) list = list.filter(p => activeTags.every(t => p.tags.includes(t)))
     if (sort === 'acc-asc')  list = [...list].sort((a, b) => a.acceptance - b.acceptance)
     if (sort === 'acc-desc') list = [...list].sort((a, b) => b.acceptance - a.acceptance)
-    if (sort === 'diff-easy') list = [...list].sort((a, b) => { const o = { Easy:0, Medium:1, Hard:2 }; return o[a.difficulty] - o[b.difficulty] })
-    if (sort === 'diff-hard') list = [...list].sort((a, b) => { const o = { Easy:0, Medium:1, Hard:2 }; return o[b.difficulty] - o[a.difficulty] })
+    if (sort === 'diff-easy') list = [...list].sort((a, b) => { const o: Record<string, number> = { Easy:0, Medium:1, Hard:2 }; return o[a.difficulty] - o[b.difficulty] })
+    if (sort === 'diff-hard') list = [...list].sort((a, b) => { const o: Record<string, number> = { Easy:0, Medium:1, Hard:2 }; return o[b.difficulty] - o[a.difficulty] })
     return list
-  }, [query, diff, activeTags, sort])
+  }, [problems, query, diff, activeTags, sort])
+
+  const ALL_TAGS = useMemo(() => Array.from(new Set(problems.flatMap(p => p.tags))).sort(), [problems])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const counts = {
-    Easy:   ALL_PROBLEMS.filter(p => p.difficulty === 'Easy').length,
-    Medium: ALL_PROBLEMS.filter(p => p.difficulty === 'Medium').length,
-    Hard:   ALL_PROBLEMS.filter(p => p.difficulty === 'Hard').length,
+    Easy:   problems.filter(p => p.difficulty === 'Easy').length,
+    Medium: problems.filter(p => p.difficulty === 'Medium').length,
+    Hard:   problems.filter(p => p.difficulty === 'Hard').length,
   }
 
   const toggleTag = (t: string) => setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-ink)', position: 'relative' }}>
-      {/* Cursor glow */}
+      {/* Ambient orbs for liquid glass refraction */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
         <CursorGlow />
+        <div className="liquid-orb liquid-orb-lg" style={{ width: 600, height: 600, background: 'rgba(59,130,246,0.12)', top: '10%', left: '-10%', animationDelay: '0s' }} />
+        <div className="liquid-orb" style={{ width: 400, height: 400, background: 'rgba(20,184,166,0.10)', top: '50%', right: '-5%', animationDelay: '-5s' }} />
+        <div className="liquid-orb liquid-orb-sm" style={{ width: 300, height: 300, background: 'rgba(139,92,246,0.08)', bottom: '10%', left: '30%', animationDelay: '-9s' }} />
       </div>
 
       <Navbar query={query} setQuery={setQuery} />
@@ -331,7 +312,7 @@ export default function ProblemsPage() {
             {/* Stat pills */}
             <div style={{ display: 'flex', gap: 10 }}>
               {(['Easy', 'Medium', 'Hard'] as const).map(d => (
-                <div key={d} style={{ padding: '6px 14px', borderRadius: 'var(--radius-full)', background: DIFF_BG[d], border: `1px solid ${DIFF_BORDER[d]}`, fontSize: '0.8rem', fontWeight: 700, color: DIFF_COLOR[d] }}>
+                <div key={d} className={`liquid-pill liquid-glass-${d === 'Easy' ? 'green' : d === 'Medium' ? 'amber' : 'rose'}`} style={{ color: DIFF_COLOR[d], fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }} onClick={() => setDiff(d)}>
                   {counts[d]} {d}
                 </div>
               ))}
@@ -340,7 +321,7 @@ export default function ProblemsPage() {
         </div>
 
         {/* ── Filter bar ────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div className="liquid-glass" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap', padding: '12px', borderRadius: 'var(--radius-lg)' }}>
           {/* Difficulty pills */}
           <div style={{ display: 'flex', gap: 6, padding: '6px 8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 'var(--radius-lg)' }}>
             {(['All', 'Easy', 'Medium', 'Hard'] as const).map(d => {
@@ -382,7 +363,7 @@ export default function ProblemsPage() {
             </button>
 
             {showTagMenu && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 'var(--radius-xl)', padding: 16, width: 300, boxShadow: '0 20px 60px rgba(0,0,0,0.6)', backdropFilter: 'blur(16px)' }}>
+              <div className="liquid-modal" style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, borderRadius: 'var(--radius-xl)', padding: 16, width: 300 }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Filter by Topic</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {ALL_TAGS.map(t => <TagPill key={t} label={t} active={activeTags.includes(t)} onClick={() => toggleTag(t)} />)}
@@ -425,7 +406,7 @@ export default function ProblemsPage() {
         </div>
 
         {/* ── Table ─────────────────────────────────────────────────────── */}
-        <div style={{ background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' }}>
+        <div className="liquid-glass" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
           {/* Table header */}
           <div style={{ display: 'grid', gridTemplateColumns: '52px 1fr auto auto auto', gap: 0, alignItems: 'center', padding: '0 var(--space-5)', height: 44, background: 'rgba(0,0,0,0.25)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>#</span>
@@ -436,7 +417,18 @@ export default function ProblemsPage() {
           </div>
 
           {/* Rows */}
-          {paginated.length === 0 ? (
+          {loading ? (
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="liquid-shimmer" style={{ height: 56, borderRadius: 8, animationDelay: `${i * 0.1}s` }} />
+              ))}
+            </div>
+          ) : error ? (
+            <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Problem catalogue unavailable</div>
+              <div style={{ color: 'var(--color-text-tertiary)', fontSize: '0.9rem' }}>{error}</div>
+            </div>
+          ) : paginated.length === 0 ? (
             <div style={{ padding: '60px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔍</div>
               <div style={{ fontWeight: 600, marginBottom: 6 }}>No problems found</div>

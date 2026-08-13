@@ -23,87 +23,76 @@ const CODE_EXAMPLES: Array<{
       [['def ', '#C792EA'], ['two_sum', '#82AAFF'], ['(nums, target):', '#E2E8F0']],
       [['    seen ', '#E2E8F0'], ['=', '#89DDFF'], [' {}', '#E2E8F0']],
       [['    ', '#E2E8F0'], ['for ', '#C792EA'], ['i, num ', '#E2E8F0'], ['in ', '#C792EA'], ['enumerate(nums):', '#E2E8F0']],
-      [['        complement ', '#E2E8F0'], ['=', '#89DDFF'], [' target ', '#E2E8F0'], ['-', '#89DDFF'], [' num', '#E2E8F0']],
-      [['        ', '#E2E8F0'], ['if ', '#C792EA'], ['complement ', '#E2E8F0'], ['in ', '#C792EA'], ['seen:', '#E2E8F0']],
-      [['            ', '#E2E8F0'], ['return ', '#C792EA'], ['[seen[complement], i]', '#E2E8F0']],
+      [['        comp ', '#E2E8F0'], ['=', '#89DDFF'], [' target ', '#E2E8F0'], ['-', '#89DDFF'], [' num', '#E2E8F0']],
+      [['        ', '#E2E8F0'], ['if ', '#C792EA'], ['comp ', '#E2E8F0'], ['in ', '#C792EA'], ['seen:', '#E2E8F0']],
+      [['            ', '#E2E8F0'], ['return ', '#C792EA'], ['[seen[comp], i]', '#E2E8F0']],
       [['        seen[num] ', '#E2E8F0'], ['=', '#89DDFF'], [' i', '#E2E8F0']],
       [['    ', '#E2E8F0'], ['return ', '#C792EA'], ['[]', '#E2E8F0']],
     ],
   },
   {
-    filename: 'valid_parens.py',
-    language: 'Python 3.12',
-    label: 'Valid Parentheses',
-    difficulty: 'Easy',
-    diffColor: '#10B981',
-    result: { runtime: '32ms', memory: '13.8 MB', beats: '97.1%' },
-    lines: [
-      [['def ', '#C792EA'], ['isValid', '#82AAFF'], ['(s):', '#E2E8F0']],
-      [['    stack ', '#E2E8F0'], ['=', '#89DDFF'], [' []', '#E2E8F0']],
-      [['    pairs ', '#E2E8F0'], ['=', '#89DDFF'], [' {', '#E2E8F0'], ['")"', '#C3E88D'], [': ', '#E2E8F0'], ['"("', '#C3E88D'], [', ', '#E2E8F0'], ['"]"', '#C3E88D'], [': ', '#E2E8F0'], ['"["', '#C3E88D'], ['}', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['for ', '#C792EA'], ['c ', '#E2E8F0'], ['in ', '#C792EA'], ['s:', '#E2E8F0']],
-      [['        ', '#E2E8F0'], ['if ', '#C792EA'], ['c ', '#E2E8F0'], ['in ', '#C792EA'], ['pairs:', '#E2E8F0']],
-      [['            ', '#E2E8F0'], ['if ', '#C792EA'], ['not ', '#C792EA'], ['stack ', '#E2E8F0'], ['or ', '#C792EA'], ['stack[-1] != pairs[c]:', '#E2E8F0']],
-      [['                ', '#E2E8F0'], ['return ', '#C792EA'], ['False', '#F07178']],
-      [['            stack.pop()', '#82AAFF']],
-      [['        ', '#E2E8F0'], ['else', '#C792EA'], [': stack.append(c)', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['return ', '#C792EA'], ['not ', '#C792EA'], ['stack', '#E2E8F0']],
-    ],
-  },
-  {
-    filename: 'binary_search.py',
-    language: 'Python 3.12',
-    label: 'Binary Search',
-    difficulty: 'Easy',
-    diffColor: '#10B981',
-    result: { runtime: '28ms', memory: '14.1 MB', beats: '98.5%' },
-    lines: [
-      [['def ', '#C792EA'], ['search', '#82AAFF'], ['(nums, target):', '#E2E8F0']],
-      [['    l, r ', '#E2E8F0'], ['=', '#89DDFF'], [' 0', '#F78C6C'], [', ', '#E2E8F0'], ['len(nums) ', '#82AAFF'], ['-', '#89DDFF'], [' 1', '#F78C6C']],
-      [['    ', '#E2E8F0'], ['while ', '#C792EA'], ['l ', '#E2E8F0'], ['<=', '#89DDFF'], [' r:', '#E2E8F0']],
-      [['        mid ', '#E2E8F0'], ['=', '#89DDFF'], [' (l ', '#E2E8F0'], ['+', '#89DDFF'], [' r) ', '#E2E8F0'], ['//', '#89DDFF'], [' 2', '#F78C6C']],
-      [['        ', '#E2E8F0'], ['if ', '#C792EA'], ['nums[mid] ', '#E2E8F0'], ['==', '#89DDFF'], [' target:', '#E2E8F0']],
-      [['            ', '#E2E8F0'], ['return ', '#C792EA'], ['mid', '#E2E8F0']],
-      [['        ', '#E2E8F0'], ['elif ', '#C792EA'], ['nums[mid] ', '#E2E8F0'], ['<', '#89DDFF'], [' target:', '#E2E8F0']],
-      [['            l ', '#E2E8F0'], ['=', '#89DDFF'], [' mid ', '#E2E8F0'], ['+', '#89DDFF'], [' 1', '#F78C6C']],
-      [['        ', '#E2E8F0'], ['else', '#C792EA'], [': r ', '#E2E8F0'], ['=', '#89DDFF'], [' mid ', '#E2E8F0'], ['-', '#89DDFF'], [' 1', '#F78C6C']],
-      [['    ', '#E2E8F0'], ['return ', '#C792EA'], ['-1', '#F78C6C']],
-    ],
-  },
-  {
-    filename: 'max_subarray.js',
+    filename: 'two_sum.js',
     language: 'JavaScript',
-    label: 'Maximum Subarray',
-    difficulty: 'Medium',
-    diffColor: '#F59E0B',
-    result: { runtime: '72ms', memory: '52.4 MB', beats: '91.3%' },
+    label: 'Two Sum',
+    difficulty: 'Easy',
+    diffColor: '#10B981',
+    result: { runtime: '52ms', memory: '42.3 MB', beats: '89.5%' },
     lines: [
-      [['function ', '#C792EA'], ['maxSubArray', '#82AAFF'], ['(nums) {', '#E2E8F0']],
-      [['    let ', '#C792EA'], ['max ', '#E2E8F0'], ['=', '#89DDFF'], [' nums[0],', '#E2E8F0'], [' curr ', '#E2E8F0'], ['=', '#89DDFF'], [' nums[0]', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['for ', '#C792EA'], ['(let i ', '#E2E8F0'], ['=', '#89DDFF'], [' 1', '#F78C6C'], ['; i ', '#E2E8F0'], ['<', '#89DDFF'], [' nums.length; i++) {', '#E2E8F0']],
-      [['        curr ', '#E2E8F0'], ['=', '#89DDFF'], [' Math.max', '#82AAFF'], ['(nums[i], curr ', '#E2E8F0'], ['+', '#89DDFF'], [' nums[i])', '#E2E8F0']],
-      [['        max ', '#E2E8F0'], ['=', '#89DDFF'], [' Math.max', '#82AAFF'], ['(max, curr)', '#E2E8F0']],
+      [['function ', '#C792EA'], ['twoSum', '#82AAFF'], ['(nums, target) {', '#E2E8F0']],
+      [['    const ', '#C792EA'], ['seen ', '#E2E8F0'], ['= ', '#89DDFF'], ['new ', '#C792EA'], ['Map', '#FFCB6B'], ['();', '#E2E8F0']],
+      [['    for ', '#C792EA'], ['(let i = 0; i < nums.length; i++) {', '#E2E8F0']],
+      [['        const ', '#C792EA'], ['comp ', '#E2E8F0'], ['= ', '#89DDFF'], ['target - nums[i];', '#E2E8F0']],
+      [['        if ', '#C792EA'], ['(seen.has(comp)) {', '#E2E8F0']],
+      [['            return ', '#C792EA'], ['[seen.get(comp), i];', '#E2E8F0']],
+      [['        }', '#E2E8F0']],
+      [['        seen.set(nums[i], i);', '#E2E8F0']],
       [['    }', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['return ', '#C792EA'], ['max', '#E2E8F0']],
-      [['}', '#E2E8F0']],
+      [['    return ', '#C792EA'], ['[];', '#E2E8F0']],
+      [['}', '#E2E8F0']]
     ],
   },
   {
-    filename: 'climb_stairs.py',
-    language: 'Python 3.12',
-    label: 'Climbing Stairs',
+    filename: 'two_sum.cpp',
+    language: 'C++ 20',
+    label: 'Two Sum',
     difficulty: 'Easy',
     diffColor: '#10B981',
-    result: { runtime: '24ms', memory: '13.5 MB', beats: '99.0%' },
+    result: { runtime: '8ms', memory: '10.1 MB', beats: '98.8%' },
     lines: [
-      [['def ', '#C792EA'], ['climbStairs', '#82AAFF'], ['(n):', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['if ', '#C792EA'], ['n ', '#E2E8F0'], ['<=', '#89DDFF'], [' 2', '#F78C6C'], [': ', '#E2E8F0'], ['return ', '#C792EA'], ['n', '#E2E8F0']],
-      [['    a, b ', '#E2E8F0'], ['=', '#89DDFF'], [' 1', '#F78C6C'], [', ', '#E2E8F0'], ['2', '#F78C6C']],
-      [['    ', '#E2E8F0'], ['for ', '#C792EA'], ['_ ', '#E2E8F0'], ['in ', '#C792EA'], ['range(2, n):', '#E2E8F0']],
-      [['        a, b ', '#E2E8F0'], ['=', '#89DDFF'], [' b, a ', '#E2E8F0'], ['+', '#89DDFF'], [' b', '#E2E8F0']],
-      [['    ', '#E2E8F0'], ['return ', '#C792EA'], ['b', '#E2E8F0']],
+      [['vector', '#FFCB6B'], ['<', '#89DDFF'], ['int', '#FFCB6B'], ['> ', '#89DDFF'], ['twoSum', '#82AAFF'], ['(', '#E2E8F0'], ['vector', '#FFCB6B'], ['<', '#89DDFF'], ['int', '#FFCB6B'], ['>& nums, ', '#E2E8F0'], ['int', '#FFCB6B'], [' target) {', '#E2E8F0']],
+      [['    unordered_map', '#FFCB6B'], ['<', '#89DDFF'], ['int', '#FFCB6B'], [', ', '#E2E8F0'], ['int', '#FFCB6B'], ['> seen;', '#E2E8F0']],
+      [['    for ', '#C792EA'], ['(', '#E2E8F0'], ['int', '#FFCB6B'], [' i = 0; i < nums.size(); ++i) {', '#E2E8F0']],
+      [['        int', '#FFCB6B'], [' comp = target - nums[i];', '#E2E8F0']],
+      [['        if ', '#C792EA'], ['(seen.count(comp)) {', '#E2E8F0']],
+      [['            return ', '#C792EA'], ['{seen[comp], i};', '#E2E8F0']],
+      [['        }', '#E2E8F0']],
+      [['        seen[nums[i]] = i;', '#E2E8F0']],
+      [['    }', '#E2E8F0']],
+      [['    return ', '#C792EA'], ['{};', '#E2E8F0']],
+      [['}', '#E2E8F0']]
     ],
   },
+  {
+    filename: 'TwoSum.java',
+    language: 'Java 21',
+    label: 'Two Sum',
+    difficulty: 'Easy',
+    diffColor: '#10B981',
+    result: { runtime: '2ms', memory: '41.8 MB', beats: '97.2%' },
+    lines: [
+      [['public ', '#C792EA'], ['int', '#FFCB6B'], ['[] ', '#E2E8F0'], ['twoSum', '#82AAFF'], ['(', '#E2E8F0'], ['int', '#FFCB6B'], ['[] nums, ', '#E2E8F0'], ['int', '#FFCB6B'], [' target) {', '#E2E8F0']],
+      [['    Map', '#FFCB6B'], ['<', '#89DDFF'], ['Integer', '#FFCB6B'], [', ', '#E2E8F0'], ['Integer', '#FFCB6B'], ['> seen = ', '#E2E8F0'], ['new ', '#C792EA'], ['HashMap', '#FFCB6B'], ['<>();', '#E2E8F0']],
+      [['    for ', '#C792EA'], ['(', '#E2E8F0'], ['int', '#FFCB6B'], [' i = 0; i < nums.length; i++) {', '#E2E8F0']],
+      [['        int', '#FFCB6B'], [' comp = target - nums[i];', '#E2E8F0']],
+      [['        if ', '#C792EA'], ['(seen.containsKey(comp)) {', '#E2E8F0']],
+      [['            return ', '#C792EA'], ['new ', '#C792EA'], ['int', '#FFCB6B'], ['[] {seen.get(comp), i};', '#E2E8F0']],
+      [['        }', '#E2E8F0']],
+      [['        seen.put(nums[i], i);', '#E2E8F0']],
+      [['    }', '#E2E8F0']],
+      [['    return ', '#C792EA'], ['new ', '#C792EA'], ['int', '#FFCB6B'], ['[]{};', '#E2E8F0']],
+      [['}', '#E2E8F0']]
+    ],
+  }
 ]
 
 // ── Typewriter component (cycles through examples) ─────────────────────────────
@@ -287,7 +276,7 @@ function Navbar() {
     return () => window.removeEventListener('scroll', fn)
   }, [])
   return (
-    <nav style={{ position: 'sticky', top: 0, zIndex: 100, height: 64, display: 'flex', alignItems: 'center', background: scrolled ? 'rgba(11,16,32,0.95)' : 'rgba(11,16,32,0.6)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', borderBottom: `1px solid ${scrolled ? 'rgba(59,130,246,0.12)' : 'transparent'}`, transition: 'all 0.3s ease' }}>
+    <nav className="liquid-nav" style={{ position: 'sticky', top: 0, zIndex: 100, height: 64, display: 'flex', alignItems: 'center' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: 1280, margin: '0 auto', padding: '0 var(--space-6)' }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 800, fontSize: '1.25rem', color: 'white', textDecoration: 'none', letterSpacing: '-0.03em' }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,rgba(59,130,246,0.3),rgba(20,184,166,0.2))', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -345,15 +334,20 @@ function CursorGlow() {
 
     const tick = () => {
       // Smooth follow — core tracks fast, halo tracks slow
+      const lastX = smooth.current.x
+      const lastY = smooth.current.y
+
       smooth.current.x = lerp(smooth.current.x, mouse.current.x, 0.12)
       smooth.current.y = lerp(smooth.current.y, mouse.current.y, 0.12)
 
-      const scroll = window.scrollY
       const cx = smooth.current.x
-      const cy = smooth.current.y + scroll
+      const cy = smooth.current.y
 
-      // Slowly shift hue for iridescent color effect
-      hue.current = (hue.current + 0.15) % 360
+      // Distance moved since last frame
+      const dist = Math.sqrt(Math.pow(smooth.current.x - lastX, 2) + Math.pow(smooth.current.y - lastY, 2))
+
+      // Slowly shift hue dynamically based on movement instead of time
+      hue.current = (hue.current + dist * 0.15) % 360
       const h = hue.current
       const halo_color1 = `hsla(${h}, 80%, 65%, 0.09)`
       const halo_color2 = `hsla(${(h + 40) % 360}, 80%, 60%, 0.04)`
@@ -443,6 +437,130 @@ const WORKSPACE_LINES: Array<[number, string, string][]> = [
   [[9, '        ', '#E2E8F0'], [9, 'return ', '#C792EA'], [9, '[]', '#E2E8F0']],
 ]
 
+// ── Premium Fluid Wake Effect ──────────────────────────────────────────────────
+function LiquidWake() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    
+    let w = window.innerWidth
+    let h = window.innerHeight
+    canvas.width = w
+    canvas.height = h
+    
+    const onResize = () => {
+      w = window.innerWidth
+      h = window.innerHeight
+      canvas.width = w
+      canvas.height = h
+    }
+    window.addEventListener('resize', onResize)
+    
+    type Particle = { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; size: number; hue: number }
+    const particles: Particle[] = []
+    let lastMouse = { x: -1000, y: -1000 }
+    
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - lastMouse.x
+      const dy = e.clientY - lastMouse.y
+      const dist = Math.hypot(dx, dy)
+      
+      if (dist > 2) {
+        const angle = Math.atan2(dy, dx)
+        const speed = Math.min(dist * 0.04, 2.5) // Much slower, gentler spread
+
+        // Spawn left wake (subtle)
+        particles.push({
+          x: e.clientX, y: e.clientY,
+          vx: Math.cos(angle - Math.PI/2.2) * speed,
+          vy: Math.sin(angle - Math.PI/2.2) * speed,
+          life: 0, maxLife: 80 + Math.random() * 40,
+          size: 25 + Math.random() * 20,
+          hue: 220
+        })
+        
+        // Spawn right wake (subtle)
+        particles.push({
+          x: e.clientX, y: e.clientY,
+          vx: Math.cos(angle + Math.PI/2.2) * speed,
+          vy: Math.sin(angle + Math.PI/2.2) * speed,
+          life: 0, maxLife: 80 + Math.random() * 40,
+          size: 25 + Math.random() * 20,
+          hue: 220
+        })
+        
+        // Center soft trail
+        particles.push({
+          x: e.clientX, y: e.clientY,
+          vx: -Math.cos(angle) * speed * 0.3,
+          vy: -Math.sin(angle) * speed * 0.3,
+          life: 0, maxLife: 100 + Math.random() * 40,
+          size: 20 + Math.random() * 20,
+          hue: 210
+        })
+
+        lastMouse = { x: e.clientX, y: e.clientY }
+      }
+    }
+    window.addEventListener('mousemove', onMove)
+    
+    let raf: number
+    const tick = () => {
+      ctx.clearRect(0, 0, w, h)
+      // Use 'lighter' for a very subtle build-up without blowing out the colors
+      ctx.globalCompositeOperation = 'lighter'
+      
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]
+        p.x += p.vx
+        p.y += p.vy
+        p.vx *= 0.96 // Very smooth friction
+        p.vy *= 0.96
+        p.life += 1
+        
+        if (p.life > p.maxLife) {
+          particles.splice(i, 1)
+          continue
+        }
+        
+        const lifePercent = p.life / p.maxLife
+        const currentSize = p.size * (1 + lifePercent * 1.5)
+        // Extremely low opacity for a professional, glass-like fluid feel
+        const alpha = Math.pow(1 - lifePercent, 2) * 0.06
+        
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, currentSize)
+        grad.addColorStop(0, `hsla(${p.hue}, 40%, 70%, ${alpha})`)
+        grad.addColorStop(1, `hsla(${p.hue}, 40%, 70%, 0)`)
+        
+        ctx.fillStyle = grad
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('mousemove', onMove)
+      cancelAnimationFrame(raf)
+    }
+  }, [])
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, filter: 'blur(6px)' }} 
+    />
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [exampleIdx, setExampleIdx] = useState(0)
@@ -478,6 +596,11 @@ export default function LandingPage() {
       {/* Global cursor glow that follows mouse across the whole page */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
         <CursorGlow />
+        <LiquidWake />
+        {/* Ambient orbs */}
+        <div className="liquid-orb liquid-orb-lg" style={{ width: 800, height: 800, background: 'rgba(59,130,246,0.08)', top: '-10%', left: '-10%', animationDelay: '0s' }} />
+        <div className="liquid-orb" style={{ width: 600, height: 600, background: 'rgba(20,184,166,0.06)', top: '40%', right: '-15%', animationDelay: '-5s' }} />
+        <div className="liquid-orb liquid-orb-sm" style={{ width: 400, height: 400, background: 'rgba(139,92,246,0.05)', bottom: '-10%', left: '20%', animationDelay: '-11s' }} />
       </div>
 
       <Navbar />

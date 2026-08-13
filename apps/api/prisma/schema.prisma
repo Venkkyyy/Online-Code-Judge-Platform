@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String          @id
+  email               String          @unique
+  role                String          @default("USER")
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  auditLogs           AuditLog[]
+  guestCollabSessions CollabSession[] @relation("GuestSessions")
+  hostCollabSessions  CollabSession[] @relation("HostSessions")
+  submissions         Submission[]
+}
+
+model Problem {
+  id             Int             @id @default(autoincrement())
+  title          String
+  difficulty     String
+  description    String
+  tags           String[]
+  acceptance     Float           @default(0.0)
+  published      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  templates      Json?
+  collabSessions CollabSession[]
+  submissions    Submission[]
+  testCases      TestCase[]
+}
+
+model CollabSession {
+  id        String   @id
+  problemId Int
+  password  String
+  hostId    String
+  createdAt DateTime @default(now())
+  guestId   String?
+  guest     User?    @relation("GuestSessions", fields: [guestId], references: [id])
+  host      User     @relation("HostSessions", fields: [hostId], references: [id], onDelete: Cascade)
+  problem   Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+}
+
+model TestCase {
+  id             Int      @id @default(autoincrement())
+  problemId      Int
+  input          String
+  expectedOutput String
+  isHidden       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+}
+
+model Submission {
+  id            String   @id @default(uuid())
+  userId        String
+  problemId     Int
+  language      String
+  code          String
+  status        String
+  executionTime Float?
+  memoryUsed    Float?
+  failedCaseId  Int?
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isRun         Boolean  @default(false)
+  problem       Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  action    String
+  resource  String
+  details   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
