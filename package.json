@@ -7,6 +7,7 @@
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
+  "packageManager": "pnpm@11.21.0",
   "scripts": {
     "dev": "pnpm --parallel --filter \"@ocj/*\" dev",
     "dev:web": "pnpm --filter @ocj/web dev",
