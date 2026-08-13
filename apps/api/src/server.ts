@@ -17,7 +17,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => callback(null, true),
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true
   }
@@ -67,7 +67,7 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: (origin, callback) => callback(null, true),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true
 }));
@@ -209,6 +209,28 @@ router.get('/submissions/:id', authMiddleware, async (req: any, res) => {
     
     let beatsRuntime = 0;
     let beatsMemory = 0;
+    let runtimeDistribution: any[] = [];
+    let memoryDistribution: any[] = [];
+    
+    function generateMockDistribution(userValue: number, unit: string) {
+      const dist = [];
+      const min = Math.max(1, userValue * 0.2);
+      const max = userValue * 2.5;
+      const step = (max - min) / 40;
+      const peak = min + (max - min) * 0.4;
+      const variance = (max - min) / 5;
+
+      for (let i = 0; i < 40; i++) {
+        const val = min + i * step;
+        const height = Math.exp(-Math.pow(val - peak, 2) / (2 * Math.pow(variance, 2)));
+        const count = Math.floor(height * 100 * (0.8 + Math.random() * 0.4));
+        dist.push({
+          mark: val.toFixed(0) + unit,
+          count: Math.max(1, count)
+        });
+      }
+      return dist;
+    }
     
     if (submission.status === 'ACCEPTED') {
       const totalAccepted = await prisma.submission.count({
@@ -235,12 +257,16 @@ router.get('/submissions/:id', authMiddleware, async (req: any, res) => {
         beatsRuntime = 100;
         beatsMemory = 100;
       }
+      runtimeDistribution = generateMockDistribution(submission.executionTime || 50, 'ms');
+      memoryDistribution = generateMockDistribution(submission.memoryUsed || 20, 'MB');
     }
     
     res.json({
       ...submission,
       beatsRuntime: beatsRuntime.toFixed(1),
-      beatsMemory: beatsMemory.toFixed(1)
+      beatsMemory: beatsMemory.toFixed(1),
+      runtimeDistribution,
+      memoryDistribution
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch submission' });
@@ -346,6 +372,31 @@ router.get('/admin/stats', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to fetch admin stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/admin/recent-submissions', authMiddleware, async (req: any, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.uid } });
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (!isDev && (!user || (user.role !== 'ADMIN' && user.role !== 'PROBLEM_SETTER'))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    const submissions = await prisma.submission.findMany({
+      where: { isRun: false },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      include: {
+        problem: { select: { title: true } },
+        user: { select: { email: true } }
+      }
+    });
+    
+    res.json(submissions);
+  } catch (error) {
+    console.error('Failed to fetch recent submissions:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -521,7 +572,7 @@ app.get('/health/ready', async (_req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`API Server running on port ${PORT} with WebRTC Signaling`);
 });

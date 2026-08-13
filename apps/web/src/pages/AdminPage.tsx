@@ -5,13 +5,24 @@ import { useAuth } from '../contexts/AuthContext'
 // Shared Mock Data for Admin
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
+interface Problem {
+  id: number
+  title: string
+  difficulty: string
+  description: string
+  published: boolean
+  testCases: {input: string, expectedOutput: string, isHidden: boolean}[]
+  templates: { python: string; javascript: string; cpp: string; java: string }
+}
+
 export default function AdminPage() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'problems' | 'users' | 'settings'>('dashboard')
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [stats, setStats] = useState<any>(null)
-  const [problems, setProblems] = useState<any[]>([])
+  const [recentSubmissions, setRecentSubmissions] = useState<any[]>([])
+  const [problems, setProblems] = useState<Problem[]>([])
   
   // Form state
   const [newTitle, setNewTitle] = useState('')
@@ -55,6 +66,11 @@ export default function AdminPage() {
         fetch(`${API_URL}/admin/stats`, { headers: { 'Authorization': `Bearer ${token}` } })
           .then(res => res.json())
           .then(data => setStats(data))
+          .catch(console.error)
+
+        fetch(`${API_URL}/admin/recent-submissions`, { headers: { 'Authorization': `Bearer ${token}` } })
+          .then(res => res.json())
+          .then(data => setRecentSubmissions(data))
           .catch(console.error)
 
         // Fetch Problems
@@ -216,19 +232,24 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[1,2,3,4,5].map(i => (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'white', fontSize: '0.875rem' }}>
-                      <td style={{ padding: '14px 24px' }}>user{i}@example.com</td>
-                      <td style={{ padding: '14px 24px', color: '#60A5FA' }}>Two Sum</td>
+                  {recentSubmissions.map((sub, i) => (
+                    <tr key={sub.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'white', fontSize: '0.875rem' }}>
+                      <td style={{ padding: '14px 24px' }}>{sub.user?.email || 'Anonymous'}</td>
+                      <td style={{ padding: '14px 24px', color: '#60A5FA' }}>{sub.problem?.title || `Problem ${sub.problemId}`}</td>
                       <td style={{ padding: '14px 24px' }}>
-                        <span className={`liquid-pill ${i % 2 === 0 ? 'liquid-glass-green' : 'liquid-glass-rose'}`}
-                          style={{ color: i % 2 === 0 ? '#10B981' : '#F43F5E', fontSize: '0.7rem' }}>
-                          {i % 2 === 0 ? 'Accepted' : 'Wrong Answer'}
+                        <span className={`liquid-pill ${sub.status === 'ACCEPTED' ? 'liquid-glass-green' : 'liquid-glass-rose'}`}
+                          style={{ color: sub.status === 'ACCEPTED' ? '#10B981' : '#F43F5E', fontSize: '0.7rem' }}>
+                          {sub.status === 'ACCEPTED' ? 'Accepted' : (sub.status === 'WRONG_ANSWER' ? 'Wrong Answer' : (sub.status === 'COMPILATION_ERROR' ? 'Compilation Error' : 'Time Limit Exceeded'))}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 24px', color: 'var(--color-text-tertiary)' }}>{i * 12} mins ago</td>
+                      <td style={{ padding: '14px 24px', color: 'var(--color-text-tertiary)' }}>{new Date(sub.createdAt).toLocaleString()}</td>
                     </tr>
                   ))}
+                  {recentSubmissions.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>No recent submissions.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

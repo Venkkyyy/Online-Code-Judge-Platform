@@ -24,6 +24,30 @@ async function ensureDockerAvailable() {
   }
 }
 
+export async function ensureImagePulled(image: string) {
+  try {
+    // Check if the image is already downloaded
+    const images = await docker.listImages();
+    if (images.some(img => img.RepoTags?.includes(image))) return;
+    
+    console.log(`[Worker] Pulling image ${image}, this might take a minute...`);
+    await new Promise((resolve, reject) => {
+      docker.pull(image, (err: any, stream: any) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, onFinished, onProgress);
+        function onFinished(err: any, output: any) {
+          if (err) return reject(err);
+          resolve(output);
+        }
+        function onProgress(event: any) {}
+      });
+    });
+    console.log(`[Worker] Successfully pulled ${image}`);
+  } catch (err: any) {
+    console.error(`[Worker] Failed to pull image ${image}:`, err.message);
+  }
+}
+
 export async function executeCode(submission: any): Promise<ExecutionResult> {
   if (!(await ensureDockerAvailable())) {
     return { status: 'INTERNAL_ERROR', errorMessage: 'The execution service is unavailable. Please try again shortly.' };

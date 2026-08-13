@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { ExecutionResult } from './index';
+import { ExecutionResult, ensureImagePulled } from './index';
 import { Writable } from 'stream';
 
 const docker = new Docker();
@@ -11,6 +11,8 @@ export async function runJava(submission: any): Promise<ExecutionResult> {
   if (testCases.length === 0) {
     return { status: 'ACCEPTED', executionTime: 0, memoryUsed: 0 };
   }
+  
+  await ensureImagePulled('eclipse-temurin:21-alpine');
 
   // Java: expect user writes a class named `Solution` or `Main` with a main method,
   // or a Solution class with a method that reads stdin. We support stdin/stdout style.
@@ -27,7 +29,7 @@ export async function runJava(submission: any): Promise<ExecutionResult> {
       const escapedInput = (tc.input || '').replace(/\\/g, '\\\\').replace(/'/g, "'\\''");
 
       const runCmd = [
-        'bash', '-c',
+        'sh', '-c',
         // 1. Write source
         `mkdir -p /work && printf '%s' '${escapedCode}' > /work/Main.java && ` +
         // 2. Compile

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
@@ -206,8 +207,29 @@ export default function ProblemsPage() {
   const [diff, setDiff] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All')
   const [activeTags, setActiveTags] = useState<string[]>([])
   const [showTagMenu, setShowTagMenu] = useState(false)
+  const [showSortMenu, setShowSortMenu] = useState(false)
+  const tagBtnRef = useRef<HTMLButtonElement>(null)
+  const sortBtnRef = useRef<HTMLButtonElement>(null)
+  const [tagPos, setTagPos] = useState({ top: 0, left: 0 })
+  const [sortPos, setSortPos] = useState({ top: 0, left: 0 })
   const [sort, setSort] = useState('default')
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    if (showTagMenu && tagBtnRef.current) {
+      const rect = tagBtnRef.current.getBoundingClientRect()
+      setTagPos({ top: rect.bottom + 8, left: rect.left })
+    }
+  }, [showTagMenu])
+
+  useEffect(() => {
+    if (showSortMenu && sortBtnRef.current) {
+      const rect = sortBtnRef.current.getBoundingClientRect()
+      setSortPos({ top: rect.bottom + 8, left: rect.left })
+    }
+  }, [showSortMenu])
+
+  const toggleTag = (t: string) => setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -279,8 +301,6 @@ export default function ProblemsPage() {
     Hard:   problems.filter(p => p.difficulty === 'Hard').length,
   }
 
-  const toggleTag = (t: string) => setActiveTags(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
-
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-ink)', position: 'relative' }}>
       {/* Ambient orbs for liquid glass refraction */}
@@ -346,6 +366,7 @@ export default function ProblemsPage() {
           {/* Tags dropdown */}
           <div style={{ position: 'relative' }}>
             <button
+              ref={tagBtnRef}
               onClick={() => setShowTagMenu(v => !v)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -362,8 +383,8 @@ export default function ProblemsPage() {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ transform: showTagMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
             </button>
 
-            {showTagMenu && (
-              <div className="liquid-modal" style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 50, borderRadius: 'var(--radius-xl)', padding: 16, width: 300 }}>
+            {showTagMenu && createPortal(
+              <div className="liquid-glass" style={{ position: 'fixed', top: tagPos.top, left: tagPos.left, zIndex: 1000, borderRadius: 'var(--radius-xl)', padding: 16, width: 300, boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Filter by Topic</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {ALL_TAGS.map(t => <TagPill key={t} label={t} active={activeTags.includes(t)} onClick={() => toggleTag(t)} />)}
@@ -373,22 +394,58 @@ export default function ProblemsPage() {
                     Clear all tags
                   </button>
                 )}
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 
-          {/* Sort */}
-          <select
-            value={sort}
-            onChange={e => setSort(e.target.value as typeof sort)}
-            style={{ padding: '8px 32px 8px 12px', borderRadius: 'var(--radius-lg)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.09)', color: 'var(--color-text-secondary)', fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'var(--font-ui)', outline: 'none', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2.5\' stroke-linecap=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
-          >
-            <option value="default">Sort: Default</option>
-            <option value="acc-desc">Acceptance: High → Low</option>
-            <option value="acc-asc">Acceptance: Low → High</option>
-            <option value="diff-easy">Difficulty: Easy first</option>
-            <option value="diff-hard">Difficulty: Hard first</option>
-          </select>
+          {/* Sort dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={sortBtnRef}
+              onClick={() => setShowSortMenu(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 14px', borderRadius: 'var(--radius-lg)',
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.09)',
+                color: 'var(--color-text-secondary)',
+                fontSize: '0.82rem', fontWeight: 500, cursor: 'pointer', fontFamily: 'var(--font-ui)',
+                transition: 'all 0.18s ease',
+              }}
+            >
+              Sort: {sort === 'default' ? 'Default' : sort === 'acc-desc' ? 'Acceptance (High)' : sort === 'acc-asc' ? 'Acceptance (Low)' : sort === 'diff-easy' ? 'Difficulty (Easy)' : 'Difficulty (Hard)'}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ transform: showSortMenu ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+
+            {showSortMenu && createPortal(
+              <div className="liquid-glass" style={{ position: 'fixed', top: sortPos.top, left: sortPos.left, zIndex: 1000, borderRadius: '12px', padding: 8, width: 220, boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {[
+                  { id: 'default', label: 'Default' },
+                  { id: 'acc-desc', label: 'Acceptance: High → Low' },
+                  { id: 'acc-asc', label: 'Acceptance: Low → High' },
+                  { id: 'diff-easy', label: 'Difficulty: Easy first' },
+                  { id: 'diff-hard', label: 'Difficulty: Hard first' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    onClick={() => { setSort(opt.id as any); setShowSortMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', padding: '8px 12px', borderRadius: 6,
+                      background: sort === opt.id ? 'rgba(59,130,246,0.2)' : 'transparent',
+                      border: 'none', color: sort === opt.id ? '#60A5FA' : 'var(--color-text-secondary)',
+                      fontSize: '0.85rem', cursor: 'pointer', textAlign: 'left', fontWeight: sort === opt.id ? 600 : 500
+                    }}
+                    onMouseEnter={e => { if (sort !== opt.id) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                    onMouseLeave={e => { if (sort !== opt.id) e.currentTarget.style.background = 'transparent' }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
+          </div>
 
           {/* Active tag chips */}
           {activeTags.map(t => (
@@ -477,8 +534,8 @@ export default function ProblemsPage() {
         )}
       </main>
 
-      {/* Click outside to close tag menu */}
-      {showTagMenu && <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowTagMenu(false)} />}
+      {/* Click outside to close menus */}
+      {(showTagMenu || showSortMenu) && <div style={{ position: 'fixed', inset: 0, zIndex: 900 }} onClick={() => { setShowTagMenu(false); setShowSortMenu(false); }} />}
     </div>
   )
 }

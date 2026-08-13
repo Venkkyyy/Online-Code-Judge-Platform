@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { ExecutionResult } from './index';
+import { ExecutionResult, ensureImagePulled } from './index';
 import { Writable } from 'stream';
 
 const docker = new Docker();
@@ -11,6 +11,8 @@ export async function runCpp(submission: any): Promise<ExecutionResult> {
   if (testCases.length === 0) {
     return { status: 'ACCEPTED', executionTime: 0, memoryUsed: 0 };
   }
+  
+  await ensureImagePulled('gcc:12');
 
   // ── Step 1: Compile ─────────────────────────────────────────────────────────
   // Wrap user code with a harness that reads args from stdin and outputs JSON
@@ -104,7 +106,7 @@ int main() {
         `printf '%s' '${(tc.input || '').replace(/'/g, "'\\''")}' > /work/input.txt && ` +
         `echo '${code.replace(/'/g, "'\\''")}' > /work/main.cpp && ` +
         `g++ -std=c++17 -O2 -o /work/main /work/main.cpp 2>/dev/null && ` +
-        `/usr/bin/time -f '{"mem":%M}' timeout 5 /work/main < /work/input.txt`
+        `timeout 5 /work/main < /work/input.txt`
       ];
 
       runContainer = await docker.createContainer({
@@ -156,7 +158,7 @@ int main() {
         return { status: 'RUNTIME_ERROR', failedCaseId: tc.id, errorMessage: stderrText, executionTime: maxTime, memoryUsed: maxMemory };
       }
 
-      // Extract memory from /usr/bin/time output in stderr
+      // Extract memory from /usr/bin/time output in stderr (if we ever re-add it)
       let memBytes = 0;
       const memMatch = stderrText.match(/"mem":(\d+)/);
       if (memMatch) memBytes = parseInt(memMatch[1]) * 1024; // KB → bytes

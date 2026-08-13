@@ -3,171 +3,16 @@ import { Link, useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import Editor from '@monaco-editor/react'
 import { useAuth } from '../contexts/AuthContext'
 import { io, Socket } from 'socket.io-client'
-import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels'
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import { SettingsModal, EditorSettings } from '../components/SettingsModal'
+import { UserDropdown } from '../components/UserDropdown'
+import { LanguageDropdown } from '../components/LanguageDropdown'
+import { LayoutDropdown, LayoutPreset } from '../components/LayoutDropdown'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1'
 const SOCKET_URL = API_URL === '/api/v1' ? '' : (API_URL.replace(/\/api\/v1\/?$/, '') || '')
-
-// ── WebRTC Component ────────────────────────────────────────────────────────
-function WebRTCVideo({ roomId, socketUrl, onEndSession }: { roomId: string, socketUrl: string, onEndSession: () => void }) {
-  const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
-  
-  const [isScreenSharing, setIsScreenSharing] = useState(false)
-  const [connected, setConnected] = useState(false)
-  
-  const peerConnection = useRef<RTCPeerConnection | null>(null)
-  const socketRef = useRef<Socket | null>(null)
-
-  useEffect(() => {
-    const socket = io(socketUrl)
-    socketRef.current = socket
-
-    const getMedia = async () => {
-      if (localVideoRef.current && localVideoRef.current.srcObject) {
-        return localVideoRef.current.srcObject as MediaStream;
-      }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream
-        return stream;
-      } catch (err) {
-        console.error('Failed to get media devices:', err)
-        alert('Could not access camera/microphone. Video call requires permissions.')
-        return null;
-      }
-    }
-
-    socket.on('user-connected', async () => {
-      const stream = await getMedia();
-      if (!stream) return;
-      const pc = createPeerConnection(stream)
-      peerConnection.current = pc
-      const offer = await pc.createOffer()
-      await pc.setLocalDescription(offer)
-      socket.emit('offer', { roomId, offer })
-    })
-
-    socket.on('offer', async (payload: { senderId: string, offer: any }) => {
-      const stream = await getMedia();
-      if (!stream) return;
-      const pc = createPeerConnection(stream)
-      peerConnection.current = pc
-      await pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
-      const answer = await pc.createAnswer()
-      await pc.setLocalDescription(answer)
-      socket.emit('answer', { roomId, answer })
-    })
-
-    socket.on('answer', async (payload: { senderId: string, answer: any }) => {
-      const pc = peerConnection.current
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
-    })
-
-    socket.on('ice-candidate', async (payload: { senderId: string, candidate: any }) => {
-      const pc = peerConnection.current
-      if (pc && payload.candidate) await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
-    })
-    
-    socket.on('user-disconnected', () => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
-      setConnected(false)
-      if (localVideoRef.current && localVideoRef.current.srcObject) {
-        (localVideoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop())
-        localVideoRef.current.srcObject = null
-      }
-      if (peerConnection.current) {
-        peerConnection.current.close()
-        peerConnection.current = null
-      }
-    })
-
-    socket.on('connect', () => {
-      socket.emit('join-room', roomId)
-    })
-
-    return () => {
-      socket.disconnect()
-      if (localVideoRef.current && localVideoRef.current.srcObject) {
-        (localVideoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop())
-      }
-      if (peerConnection.current) peerConnection.current.close()
-    }
-  }, [roomId, socketUrl])
-
-  const createPeerConnection = (stream: MediaStream) => {
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
-    stream.getTracks().forEach(track => pc.addTrack(track, stream))
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0]
-        setConnected(true)
-      }
-    }
-    pc.onicecandidate = (event) => {
-      if (event.candidate && socketRef.current) {
-        socketRef.current.emit('ice-candidate', { roomId, candidate: event.candidate })
-      }
-    }
-    return pc
-  }
-
-  const toggleScreenShare = async () => {
-    try {
-      if (!isScreenSharing) {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true })
-        const videoTrack = displayStream.getVideoTracks()[0]
-        if (peerConnection.current) {
-          const sender = peerConnection.current.getSenders().find(s => s.track?.kind === 'video')
-          if (sender) sender.replaceTrack(videoTrack)
-        }
-        if (localVideoRef.current) localVideoRef.current.srcObject = displayStream
-        setIsScreenSharing(true)
-        videoTrack.onended = () => { stopScreenShare() }
-      } else {
-        stopScreenShare()
-      }
-    } catch (e) {
-      console.error('Screen sharing failed:', e)
-    }
-  }
-
-  const stopScreenShare = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      const videoTrack = stream.getVideoTracks()[0]
-      if (peerConnection.current) {
-        const sender = peerConnection.current.getSenders().find(s => s.track?.kind === 'video')
-        if (sender) sender.replaceTrack(videoTrack)
-      }
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream
-      setIsScreenSharing(false)
-    } catch(e) { console.error(e) }
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 200, borderRadius: 8, overflow: 'hidden', background: '#000', marginBottom: 12 }}>
-        <video ref={remoteVideoRef} autoPlay playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-        {!connected && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-secondary)', fontSize: '0.85rem', background: '#111' }}>
-            Waiting for partner to join...
-          </div>
-        )}
-        <video ref={localVideoRef} autoPlay playsInline muted style={{ width: 80, height: 60, background: '#111', borderRadius: 8, objectFit: 'cover', position: 'absolute', bottom: 8, right: 8, border: '2px solid rgba(255,255,255,0.2)', display: connected ? 'block' : 'none' }} />
-      </div>
-      
-      <div style={{ display: 'flex', gap: 12, paddingBottom: 12 }}>
-        <button onClick={toggleScreenShare} disabled={!connected} style={{ flex: 1, background: isScreenSharing ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.15)', color: isScreenSharing ? '#EF4444' : '#60A5FA', border: 'none', padding: '10px 16px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: connected ? 'pointer' : 'not-allowed', fontSize: '0.85rem', fontWeight: 600, transition: 'all 0.2s', opacity: connected ? 1 : 0.5 }}>
-          {isScreenSharing ? 'Stop Share' : 'Share Screen'}
-        </button>
-        <button onClick={onEndSession} style={{ flex: 1, background: 'rgba(239,68,68,0.15)', color: '#EF4444', border: 'none', padding: '10px 16px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, transition: 'all 0.2s' }}>
-          End Session
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ── Shared components ────────────────────────────────────────────────────────
 type JudgeState = 'IDLE' | 'QUEUED' | 'RUNNING'
@@ -206,27 +51,37 @@ function Stopwatch() {
   )
 }
 
-function WorkspaceNav({ runState, onRun, onSubmit }: { runState: JudgeState, onRun: () => void, onSubmit: () => void }) {
+function WorkspaceNav({ 
+  runState, 
+  onRun, 
+  onSubmit, 
+  onOpenSettings, 
+  onOpenCollab, 
+  layoutPreset, 
+  onLayoutChange 
+}: { 
+  runState: JudgeState, 
+  onRun: () => void, 
+  onSubmit: () => void, 
+  onOpenSettings: () => void, 
+  onOpenCollab: () => void, 
+  layoutPreset: LayoutPreset, 
+  onLayoutChange: (p: LayoutPreset) => void 
+}) {
   const { user, signOut } = useAuth()
   return (
-    <nav className="liquid-nav" style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0, zIndex: 100 }}>
+    <nav className="liquid-nav" style={{ height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0, zIndex: 100, gap: 16, overflow: 'visible' }}>
       {/* Left */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-        <Link to="/problems" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94A3B8', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, transition: 'color 0.2s' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
+        <Link to="/problems" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94A3B8', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600, transition: 'color 0.2s', whiteSpace: 'nowrap' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           Problem List
         </Link>
       </div>
 
       {/* Center - Run / Submit / Collab */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button 
-          onClick={(window as any).toggleSwapLayout}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#E2E8F0', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 16V4m0 0L3 8m4-4l4 4m6 12V8m0 12l-4-4m4 4l4-4"/></svg>
-          Swap Layout
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <LayoutDropdown value={layoutPreset} onChange={onLayoutChange} />
         <button 
           onClick={onRun}
           disabled={runState !== 'IDLE'}
@@ -251,7 +106,7 @@ function WorkspaceNav({ runState, onRun, onSubmit }: { runState: JudgeState, onR
         {/* Collab Button */}
         <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
         <button 
-          onClick={() => (window as any).openCollabModal?.()}
+          onClick={onOpenCollab}
           style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#A78BFA', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -260,18 +115,13 @@ function WorkspaceNav({ runState, onRun, onSubmit }: { runState: JudgeState, onR
       </div>
 
       {/* Right */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0, position: 'relative', zIndex: 110 }}>
         <Stopwatch />
-        <button style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' }}>
+        <button onClick={onOpenSettings} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
         {user ? (
-          <>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(59,130,246,0.5),rgba(20,184,166,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.8rem', fontWeight: 600 }}>
-              {user.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
-            </div>
-            <button onClick={() => signOut()} style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '0.85rem' }}>Sign Out</button>
-          </>
+          <UserDropdown user={user} onSignOut={signOut} />
         ) : (
           <Link to="/signin" style={{ color: '#60A5FA', fontSize: '0.85rem', textDecoration: 'none', fontWeight: 500 }}>Sign In</Link>
         )}
@@ -281,88 +131,254 @@ function WorkspaceNav({ runState, onRun, onSubmit }: { runState: JudgeState, onR
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+function formatDescriptionText(desc: string) {
+  if (!desc) return '';
+  
+  let mainPart = desc;
+  let constraintsPart = '';
+  const constraintsIndex = desc.indexOf('Constraints:');
+  if (constraintsIndex !== -1) {
+    mainPart = desc.substring(0, constraintsIndex);
+    constraintsPart = desc.substring(constraintsIndex).replace('Constraints:', '').trim();
+  }
+  
+  const parts = mainPart.split(/(Example \d+:|Example:)/g);
+  let html = '';
+  
+  html += `<p style="margin-bottom: 16px; white-space: pre-line; color: #cbd5e1; font-size: 0.95rem; line-height: 1.75;">${parts[0].trim()}</p>`;
+  
+  for (let i = 1; i < parts.length; i += 2) {
+    const header = parts[i];
+    const content = parts[i + 1] || '';
+    
+    const lines = content.split('\n');
+    let inputStr = '';
+    let outputStr = '';
+    let explanationStr = '';
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('Input:')) {
+        inputStr = trimmed.replace('Input:', '').trim();
+      } else if (trimmed.startsWith('Output:')) {
+        outputStr = trimmed.replace('Output:', '').trim();
+      } else if (trimmed.startsWith('Explanation:')) {
+        explanationStr = trimmed.replace('Explanation:', '').trim();
+      } else if (trimmed && explanationStr) {
+        explanationStr += ' ' + trimmed;
+      }
+    });
+
+    html += `
+      <div class="problem-example" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 18px; margin: 20px 0; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; box-shadow: inset 0 2px 10px rgba(0,0,0,0.3); backdrop-filter: blur(4px);">
+        <div style="color: #64748b; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; font-family: sans-serif;">${header.replace(':', '')}</div>
+        <div style="margin-bottom: 8px; color: #e2e8f0;"><span style="color: #60a5fa; font-weight: 600;">Input:</span> <span>${inputStr}</span></div>
+        <div style="margin-bottom: ${explanationStr ? '8px' : '0'}; color: #10b981; font-weight: 600;"><span style="color: #10b981; font-weight: 600;">Output:</span> <span>${outputStr}</span></div>
+        ${explanationStr ? `<div style="color: #94a3b8; font-size: 0.825rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 10px; line-height: 1.6; font-family: sans-serif;"><span style="color: #64748b; font-weight: 600;">Explanation:</span> ${explanationStr}</div>` : ''}
+      </div>
+    `;
+  }
+  
+  if (constraintsPart) {
+    html += `
+      <div style="margin-top: 28px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 20px;">
+        <h4 style="color: white; font-size: 0.9rem; font-weight: 600; margin-bottom: 10px; font-family: sans-serif;">Constraints:</h4>
+        <ul style="margin: 0; padding-left: 20px; color: #94a3b8; font-size: 0.85rem; line-height: 1.7; display: flex; flex-direction: column; gap: 6px;">
+          ${constraintsPart.split('\n').filter(c => c.trim()).map(c => `<li><code style="background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #f43f5e;">${c.trim()}</code></li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+  
+  return html;
+}
+
 export default function WorkspacePage() {
-  const { id } = useParams()
-  const { user } = useAuth()
+  const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
   
   const [problem, setProblem] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [lang, setLang] = useState<'python' | 'javascript' | 'cpp' | 'java'>('python')
+  const [_error, setError] = useState('')
+  
   const [code, setCode] = useState('')
+  const [lang, setLang] = useState<'python' | 'javascript' | 'cpp' | 'java'>('python')
   const [activeTab, setActiveTab] = useState<'description' | 'editorial' | 'submissions'>('description')
-  const [activeTestCase, setActiveTestCase] = useState(0)
-  const [activeConsoleTab, setActiveConsoleTab] = useState<'testcases' | 'result'>('testcases')
+  
+  // Settings
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<EditorSettings>({
+    theme: 'codejudge-dark',
+    fontSize: 14,
+    tabSize: 4
+  })
+  
+  // Layout Preset
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('standard')
+  const isMobile = useMediaQuery('(max-width: 768px)')
+  
+  // Judge State
   const [runState, setRunState] = useState<JudgeState>('IDLE')
   const [submissionResult, setSubmissionResult] = useState<any>(null)
-
-  // Collab State
-  const [swapLayout, setSwapLayout] = useState(false)
-  ;(window as any).toggleSwapLayout = () => setSwapLayout(s => !s)
-
+  const [showRightPanel, setShowRightPanel] = useState(false)
+  const rightPanelRef = useRef<any>(null)
+  
+  // Collab Room States
   const [collabModalOpen, setCollabModalOpen] = useState(false)
-  const rightPanelRef = useRef<ImperativePanelHandle>(null)
-  const [collabPassword, setCollabPassword] = useState('')
-  const [isCollabLoading, setIsCollabLoading] = useState(false)
+  const [isJoiningCollab, setIsJoiningCollab] = useState(false)
   const [collabSessionId, setCollabSessionId] = useState('')
+  const [collabPassword, setCollabPassword] = useState('')
   const [joinSessionId, setJoinSessionId] = useState('')
   const [joinPassword, setJoinPassword] = useState('')
-  const [isJoiningCollab, setIsJoiningCollab] = useState(false)
+  const [isCollabLoading, setIsCollabLoading] = useState(false)
+  
+  // Live sync states
   const [isInCollabRoom, setIsInCollabRoom] = useState(false)
-  const [isVideoEnabled, setIsVideoEnabled] = useState(false)
-  const [submissions, setSubmissions] = useState<any[]>([])
-  const [collabSocketConnected, setCollabSocketConnected] = useState(false)
   const collabSocketRef = useRef<Socket | null>(null)
-  const collabQuery = searchParams.get('collab')
+  const [collabSocketConnected, setCollabSocketConnected] = useState(false)
+  const [_partnerActive, setPartnerActive] = useState(false)
+  const [_partnerCursor, setPartnerCursor] = useState<{lineNumber: number, column: number} | null>(null)
+  
+  // Submissions list & availability tracker
+  const [submissions, setSubmissions] = useState<any[]>([])
+  const submissionsSupportedRef = useRef<boolean>(true)
 
+  // Attach global openCollabModal caller
   useEffect(() => {
-    ;(window as any).openCollabModal = () => setCollabModalOpen(true)
-    if (collabQuery) {
-      setJoinSessionId(collabQuery)
-      setIsJoiningCollab(true)
-      setCollabModalOpen(true)
-    }
+    (window as any).openCollabModal = () => setCollabModalOpen(true);
     return () => {
-      delete (window as any).openCollabModal
-    }
-  }, [collabQuery])
+      delete (window as any).openCollabModal;
+    };
+  }, []);
 
-  // Fetch user's past submissions for this problem
   useEffect(() => {
-    if (user && problem) {
-      user.getIdToken().then(token => {
-        fetch(`${API_URL}/users/submissions`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-          .then(r => r.json())
-          .then(data => {
-            if (Array.isArray(data)) {
-              setSubmissions(data.filter((s: any) => s.problemId === problem.id))
-            }
-          })
-          .catch(console.error)
-      })
+    // Sync query param layout if exists
+    const urlPreset = searchParams.get('layout')
+    if (urlPreset && ['standard', 'flipped', 'stacked', 'leet', 'note', 'debug', 'focus'].includes(urlPreset)) {
+      setLayoutPreset(urlPreset as LayoutPreset)
     }
-  }, [user, problem, submissionResult])
+  }, [searchParams])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    async function loadProblem() {
+      try {
+        setLoading(true)
+        const res = await fetch(`${API_URL}/problems/${id}`, { signal: controller.signal })
+        if (!res.ok) throw new Error('Problem not found')
+        const data = await res.json()
+        setProblem(data)
+        setCode(data.templates?.[lang] || '')
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setError(err instanceof Error ? err.message : 'Failed to load problem')
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadProblem()
+    return () => controller.abort()
+  }, [id])
+
+  // Lazy load submissions only when user views the 'Submissions' tab
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadSubmissions() {
+      if (activeTab !== 'submissions' || !user || !id || !submissionsSupportedRef.current) {
+        return
+      }
+
+      try {
+        const token = await user.getIdToken().catch(() => null)
+        const headers: Record<string, string> = {}
+        if (token) headers['Authorization'] = `Bearer ${token}`
+
+        const res = await fetch(`${API_URL}/submissions?problemId=${id}`, { headers })
+
+        if (res.status === 404) {
+          submissionsSupportedRef.current = false
+          if (isMounted) setSubmissions([])
+          return
+        }
+
+        if (!res.ok) {
+          if (isMounted) setSubmissions([])
+          return
+        }
+
+        const data = await res.json()
+        const list = Array.isArray(data) ? data : Array.isArray(data?.submissions) ? data.submissions : []
+        if (isMounted) setSubmissions(list)
+      } catch (_err) {
+        if (isMounted) setSubmissions([])
+      }
+    }
+
+    if (runState === 'IDLE') {
+      loadSubmissions()
+    }
+
+    return () => { isMounted = false }
+  }, [activeTab, user?.uid, id, submissionResult?.id, runState])
+
+  // Collab Room setup
+  useEffect(() => {
+    if (isInCollabRoom && collabSessionId) {
+      const socket = io(SOCKET_URL, {
+        path: '/socket.io',
+        transports: ['websocket'],
+      })
+      collabSocketRef.current = socket
+
+      socket.on('connect', () => {
+        setCollabSocketConnected(true)
+        socket.emit('join-room', { roomId: collabSessionId, userId: user?.uid || 'anon' })
+      })
+
+      socket.on('code-sync', (data: { code: string }) => {
+        setCode(data.code)
+      })
+
+      socket.on('partner-cursor', (pos: { lineNumber: number, column: number }) => {
+        setPartnerCursor(pos)
+      })
+
+      socket.on('partner-status', (status: { active: boolean }) => {
+        setPartnerActive(status.active)
+      })
+
+      socket.on('disconnect', () => {
+        setCollabSocketConnected(false)
+      })
+
+      return () => {
+        socket.disconnect()
+      }
+    }
+  }, [isInCollabRoom, collabSessionId])
 
   const generateCollabSession = async () => {
-    setIsCollabLoading(true)
     try {
+      setIsCollabLoading(true)
       const token = await user?.getIdToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch(`${API_URL}/collab/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ problemId: problem.id })
+        headers,
+        body: JSON.stringify({ problemId: parseInt(id || '0') })
       })
       if (res.ok) {
         const data = await res.json()
         setCollabSessionId(data.sessionId)
         setCollabPassword(data.password)
-        setIsInCollabRoom(true)
       } else {
-        const errorData = await res.json().catch(() => ({}));
-        alert(errorData.error || 'Failed to create session (are you logged in?)')
+        alert('Failed to create collab room')
       }
     } catch (e) {
       console.error(e)
@@ -372,26 +388,24 @@ export default function WorkspacePage() {
   }
 
   const joinCollabSession = async () => {
-    if (!user) {
-      alert('You must be logged in to join a collab session!')
-      return
-    }
-    setIsCollabLoading(true)
     try {
-      const token = await user.getIdToken()
+      setIsCollabLoading(true)
+      const token = await user?.getIdToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
       const res = await fetch(`${API_URL}/collab/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers,
         body: JSON.stringify({ sessionId: joinSessionId, password: joinPassword })
       })
       if (res.ok) {
+        const data = await res.json()
         setCollabSessionId(joinSessionId)
-        setCollabPassword(joinPassword)
-        setCollabModalOpen(false)
-        setIsJoiningCollab(false)
         setIsInCollabRoom(true)
+        setCollabModalOpen(false)
       } else {
-        alert('Invalid password or session')
+        alert('Invalid session ID or password')
       }
     } catch (e) {
       console.error(e)
@@ -401,112 +415,73 @@ export default function WorkspacePage() {
   }
 
   const handleStartHostCollab = () => {
-    setCollabModalOpen(false)
     setIsInCollabRoom(true)
+    setCollabModalOpen(false)
   }
 
-  useEffect(() => {
-    if (!isInCollabRoom || !collabSessionId) return
-
-    const socket = io(SOCKET_URL, { withCredentials: true })
-    collabSocketRef.current = socket
-
-    socket.on('connect', () => {
-      setCollabSocketConnected(true)
-      socket.emit('join-room', collabSessionId)
-    })
-    socket.on('disconnect', () => setCollabSocketConnected(false))
-    socket.on('code-update', (payload: any) => {
-      if (payload?.code && payload.senderId !== socket.id) {
-        setCode(payload.code)
-      }
-    })
-
-    return () => {
-      socket.off('connect')
-      socket.off('disconnect')
-      socket.off('code-update')
-      socket.disconnect()
-      collabSocketRef.current = null
-      setCollabSocketConnected(false)
-    }
-  }, [isInCollabRoom, collabSessionId])
-
-  useEffect(() => {
-    const fetchProblem = async () => {
-      try {
-        const res = await fetch(`${API_URL}/problems/${id}`)
-        if (res.ok) {
-          const data = await res.json()
-          setProblem(data)
-          if (data.templates && data.templates.python) {
-            setCode(data.templates.python)
-          } else {
-            setCode('')
-          }
-        }
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchProblem()
-  }, [id])
-
-  const authHeader = async () => {
-    const token = await user?.getIdToken()
-    return token ? { Authorization: `Bearer ${token}` } as Record<string, string> : {} as Record<string, string>
-  }
-
-  const executeCode = async (mode: 'RUN' | 'SUBMIT') => {
-    if (!user) {
-      alert('Please sign in to run or submit code.')
-      return
-    }
-    if (!code || code.trim().length === 0) {
-      alert('Please write some code before running or submitting.')
-      return
-    }
-    
-    // Animate open the right pane for results
-    if (rightPanelRef.current) {
-      try { rightPanelRef.current.expand() } catch {}
-    }
-    
-    setRunState('QUEUED')
-    setActiveConsoleTab('result')
-    setSubmissionResult(null)
+  const executeCode = async (action: 'RUN' | 'SUBMIT') => {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        ...(await authHeader())
+      setRunState('QUEUED')
+      setSubmissionResult(null)
+      setShowRightPanel(true)
+      
+      const token = await user?.getIdToken().catch(() => null)
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
       }
-      const res = await fetch(`${API_URL}/${mode === 'RUN' ? 'runs' : 'submissions'}`, {
+
+      const res = await fetch(`${API_URL}/submissions`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ problemId: problem.id, language: lang, code })
+        body: JSON.stringify({
+          problemId: parseInt(id || '0'),
+          language: lang,
+          code,
+          isRun: action === 'RUN'
+        })
       })
-      if (!res.ok) throw new Error('Execution request failed')
-      const data = await res.json()
       
+      if (!res.ok) {
+        let errMessage = 'Failed to submit code'
+        try {
+          const errData = await res.json()
+          errMessage = errData.message || errData.error || errMessage
+        } catch (_) {}
+        
+        if (res.status === 401) {
+          errMessage = 'Please sign in to run or submit code.'
+        }
+
+        setRunState('IDLE')
+        setSubmissionResult({ status: 'ERROR', errorMessage: errMessage, isRun: action === 'RUN' })
+        return
+      }
+      
+      const data = await res.json()
       setRunState('RUNNING')
       
-      const poll = setInterval(async () => {
-        const pollRes = await fetch(`${API_URL}/submissions/${data.id}`, { headers })
-        if (pollRes.ok) {
-          const pollData = await pollRes.json()
-          if (pollData.status !== 'QUEUED' && pollData.status !== 'RUNNING') {
-            clearInterval(poll)
+      // Poll submission result
+      const interval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`${API_URL}/submissions/${data.id}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          })
+          if (!statusRes.ok) return
+          const statusData = await statusRes.json()
+          if (statusData.status !== 'QUEUED' && statusData.status !== 'RUNNING') {
+            clearInterval(interval)
+            setSubmissionResult(statusData)
             setRunState('IDLE')
-            setSubmissionResult(pollData)
           }
+        } catch (pollErr) {
+          console.error('Polling error:', pollErr)
         }
       }, 1000)
     } catch (err) {
       console.error(err)
       setRunState('IDLE')
-      setSubmissionResult({ status: 'INTERNAL_ERROR', error: 'Failed to connect to judge server.' })
+      setSubmissionResult({ status: 'INTERNAL_ERROR', errorMessage: 'Failed to connect to judge server.' })
     }
   }
 
@@ -526,15 +501,25 @@ export default function WorkspacePage() {
     });
   }
 
+  // Similar questions data source
+  const similarQuestionsList = Array.isArray(problem?.similarQuestions) && problem.similarQuestions.length > 0
+    ? problem.similarQuestions
+    : [
+        { id: '1', title: 'Two Sum' },
+        { id: '15', title: '3Sum' },
+        { id: '56', title: 'Merge Intervals' },
+        { id: '125', title: 'Valid Palindrome' }
+      ].filter(q => String(q.id) !== String(id));
+
   if (loading) {
-    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-ink)', color: 'white' }}>Loading problem...</div>
+    return <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-ink)', color: 'white' }}>Loading problem...</div>
   }
   if (!problem) {
-    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-ink)', color: 'white' }}>Problem not found</div>
+    return <div style={{ height: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-ink)', color: 'white' }}>Problem not found</div>
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--color-ink)', overflow: 'hidden' }}>
+    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--color-ink)', overflow: 'hidden' }}>
       <style>{`
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .problem-description pre { position: relative; background: rgba(0,0,0,0.4); padding: 40px 16px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); font-family: var(--font-code); font-size: 0.85rem; color: #E5E7EB; margin: 24px 0 12px; white-space: pre-wrap; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2); }
@@ -547,12 +532,42 @@ export default function WorkspacePage() {
         .resize-handle-horizontal { height: 8px; width: 100%; cursor: row-resize; }
         .resize-handle-horizontal::after { width: 32px; height: 2px; }
       `}</style>
-      <WorkspaceNav runState={runState} onRun={handleRun} onSubmit={handleSubmit} />
       
-      <PanelGroup direction="horizontal" style={{ flex: 1, padding: 8, height: 'calc(100vh - 50px)', gap: 8 }}>
+      {layoutPreset !== 'focus' && (
+        <WorkspaceNav 
+          runState={runState} 
+          onRun={handleRun} 
+          onSubmit={handleSubmit} 
+          onOpenSettings={() => setIsSettingsOpen(true)} 
+          onOpenCollab={() => setCollabModalOpen(true)}
+          layoutPreset={layoutPreset} 
+          onLayoutChange={setLayoutPreset} 
+        />
+      )}
+      {layoutPreset === 'focus' && (
+        <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 100 }}>
+          <button onClick={() => setLayoutPreset('standard')} style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', padding: '8px 16px', borderRadius: 8, color: 'white', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(8px)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+            Exit Focus
+          </button>
+        </div>
+      )}
+      
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} setSettings={setSettings} />
+      
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <PanelGroup 
+          orientation={(isMobile || layoutPreset === 'stacked') ? "vertical" : "horizontal"} 
+          style={{ 
+            flex: 1, padding: layoutPreset === 'focus' ? '0' : '4px 8px 8px 8px', height: '100%', gap: layoutPreset === 'focus' ? 0 : 8, 
+            flexDirection: (isMobile || layoutPreset === 'stacked') ? 'column' : layoutPreset === 'flipped' ? 'row-reverse' : 'row' 
+          }}
+        >
           
         {/* ── LEFT PANE: Description ── */}
-        <Panel defaultSize={35} order={swapLayout ? 2 : 1}>
+        {layoutPreset !== 'focus' && (
+        <>
+        <Panel defaultSize={35} minSize={15}>
 <div className="liquid-glass" style={{ height: '100%', borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Tabs */}
           <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', padding: '0 8px', background: 'rgba(0,0,0,0.1)' }}>
@@ -584,8 +599,60 @@ export default function WorkspacePage() {
                 <div 
                   className="problem-description"
                   style={{ fontSize: '0.95rem', lineHeight: 1.7, color: 'var(--color-text-secondary)' }}
-                  dangerouslySetInnerHTML={{ __html: problem.description }}
+                  dangerouslySetInnerHTML={{ __html: formatDescriptionText(problem.description) }}
                 />
+                
+                <div style={{ marginTop: 40, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 24 }}>
+                  <h3 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Hints
+                  </h3>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: 8, color: 'var(--color-text-secondary)', fontSize: '0.85rem', marginBottom: 24 }}>
+                    Try breaking down the problem into smaller subproblems. Consider using a hash map or two pointers to optimize your time complexity.
+                  </div>
+                  
+                  <h3 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    Similar Questions
+                  </h3>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {similarQuestionsList.map((sq: any) => {
+                      const sqTitle = typeof sq === 'string' ? sq : sq.title;
+                      const sqId = typeof sq === 'object' && sq.id ? sq.id : null;
+                      return (
+                        <button 
+                          key={sqTitle} 
+                          onClick={() => {
+                            if (sqId) {
+                              navigate(`/problems/${sqId}`);
+                            } else {
+                              navigate(`/problems?search=${encodeURIComponent(sqTitle)}`);
+                            }
+                          }}
+                          style={{ 
+                            background: 'rgba(59,130,246,0.1)', 
+                            border: '1px solid rgba(59,130,246,0.2)',
+                            color: '#60A5FA', 
+                            padding: '6px 14px', 
+                            borderRadius: 20, 
+                            fontSize: '0.75rem', 
+                            fontWeight: 500,
+                            cursor: 'pointer', 
+                            transition: 'all 0.2s',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }} 
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.25)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,130,246,0.1)'}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                          {sqTitle}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
             {activeTab === 'editorial' && <div style={{ color: 'var(--color-text-secondary)' }}>Editorial content coming soon.</div>}
@@ -610,7 +677,7 @@ export default function WorkspacePage() {
                       {submissions.map((sub: any) => (
                         <tr key={sub.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                           <td style={{ padding: '10px 0', color: sub.status === 'ACCEPTED' ? '#10B981' : sub.status === 'WRONG_ANSWER' ? '#EF4444' : '#F59E0B', fontWeight: 600 }}>
-                            {sub.status.replace(/_/g, ' ')}
+                            {sub.status?.replace(/_/g, ' ')}
                           </td>
                           <td style={{ padding: '10px 0', color: 'var(--color-text-secondary)' }}>
                             {sub.executionTime != null ? `${sub.executionTime}ms` : 'N/A'}
@@ -636,29 +703,21 @@ export default function WorkspacePage() {
 
         </Panel>
 <PanelResizeHandle className="resize-handle" />
+</>
+)}
 
-<Panel defaultSize={45} order={swapLayout ? 1 : 2} style={{ display: 'flex', flexDirection: 'column' }}>
+<Panel defaultSize={layoutPreset === 'focus' ? 100 : 45} minSize={15} style={{ display: 'flex', flexDirection: 'column' }}>
   <div className="liquid-glass" style={{ flex: 1, borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
     {/* Editor Header */}
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: 'linear-gradient(to right, rgba(255,255,255,0.02), rgba(255,255,255,0.0))', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ padding: '4px 16px', borderRadius: 20, background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <select 
-            value={lang} 
-            onChange={e => {
-              const newLang = e.target.value as any;
-              setLang(newLang);
-              setCode(problem.templates ? problem.templates[newLang as keyof typeof problem.templates] : '');
-            }}
-            style={{ background: 'transparent', border: 'none', color: '#60A5FA', fontSize: '0.85rem', fontWeight: 600, outline: 'none', appearance: 'none', paddingRight: 16, cursor: 'pointer' }}
-          >
-            <option value="python" style={{ background: '#1e293b', color: '#fff' }}>Python 3</option>
-            <option value="javascript" style={{ background: '#1e293b', color: '#fff' }}>JavaScript</option>
-            <option value="cpp" style={{ background: '#1e293b', color: '#fff' }}>C++ 17</option>
-            <option value="java" style={{ background: '#1e293b', color: '#fff' }}>Java 21</option>
-          </select>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="3"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
+        <LanguageDropdown 
+          value={lang} 
+          onChange={(newLang) => {
+            setLang(newLang as any);
+            setCode(problem.templates ? problem.templates[newLang as keyof typeof problem.templates] : '');
+          }} 
+        />
       </div>
       
       <button
@@ -676,7 +735,7 @@ export default function WorkspacePage() {
       <Editor
         height="100%"
         language={lang}
-        theme="codejudge-dark"
+        theme={settings.theme}
         value={code}
         onChange={val => {
           const nextCode = val || ''
@@ -688,7 +747,8 @@ export default function WorkspacePage() {
         beforeMount={handleEditorWillMount}
         options={{
           minimap: { enabled: false },
-          fontSize: 14,
+          fontSize: settings.fontSize,
+          tabSize: settings.tabSize,
           fontFamily: '"JetBrains Mono", "Fira Code", monospace',
           lineHeight: 1.6,
           scrollBeyondLastLine: false,
@@ -702,12 +762,17 @@ export default function WorkspacePage() {
   </div>
 </Panel>
 
+{layoutPreset !== 'focus' && layoutPreset !== 'stacked' && layoutPreset !== 'flipped' && layoutPreset !== 'leet' && (showRightPanel || isInCollabRoom) && (
+  <>
 <PanelResizeHandle className="resize-handle" />
 
 {/* ── PANEL 3: Test Results / Collab ── */}
-<Panel ref={rightPanelRef} defaultSize={0} minSize={20} collapsible={true} order={3} style={{ display: 'flex', flexDirection: 'column' }}>
+{/* @ts-ignore */}
+<Panel id="results" ref={rightPanelRef} defaultSize={30} minSize={15} collapsible={true} order={3} style={{ display: 'flex', flexDirection: 'column' }}>
   <div className="liquid-glass" style={{ flex: 1, borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-    
+{(() => {
+const renderResultContent = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
       <h3 style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em' }}>
         {isInCollabRoom ? 'COLLAB SESSION' : submissionResult?.isRun ? 'RUN RESULTS' : 'SUBMISSION RESULTS'}
@@ -722,33 +787,78 @@ export default function WorkspacePage() {
     
     <div style={{ flex: 1, padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {isInCollabRoom ? (
-        isVideoEnabled ? (
-          <WebRTCVideo roomId={collabSessionId} socketUrl={SOCKET_URL} onEndSession={() => { setIsInCollabRoom(false); setCollabSessionId(''); setIsVideoEnabled(false); }} />
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
-            <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', textAlign: 'center' }}>
-              Code sharing is active.<br/>Join the video call to see and hear your partner.
-            </div>
-            <button onClick={() => setIsVideoEnabled(true)} style={{ background: '#3B82F6', color: 'white', padding: '10px 20px', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer' }}>
-              Join Video Call
-            </button>
-            <button onClick={() => { setIsInCollabRoom(false); setCollabSessionId(''); setIsVideoEnabled(false); }} style={{ background: 'rgba(239,68,68,0.15)', color: '#EF4444', padding: '10px 20px', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer' }}>
-              End Session
-            </button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
+          <div style={{ color: '#10B981', fontSize: '1.2rem', textAlign: 'center', fontWeight: 600 }}>
+            Live Collab is Active
           </div>
-        )
+          <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem', textAlign: 'center', maxWidth: 300 }}>
+            Your code is currently being synced in real-time with your partner.
+          </div>
+          <button onClick={() => { setIsInCollabRoom(false); setCollabSessionId(''); }} style={{ background: '#EF4444', color: 'white', padding: '10px 20px', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer', marginTop: 12 }}>
+            End Session
+          </button>
+        </div>
       ) : (
         <>
           {submissionResult ? (
             <>
               {submissionResult.status === 'ACCEPTED' ? (
                 <>
-                  {/* Results cards — using real timing data */}
-                  {problem.testCases?.map((tc: any, i: number) => (
-                    <div key={i} className="liquid-glass-green" style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between' }}>
+                  {/* Stat Cards */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                    <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Runtime
+                      </div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        {submissionResult.executionTime ?? '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                        Beats <span style={{ color: '#10B981', fontWeight: 600 }}>{submissionResult.beatsRuntime}%</span>
+                      </div>
+                    </div>
+                    <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                        Memory
+                      </div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                        {submissionResult.memoryUsed ? (submissionResult.memoryUsed).toFixed(1) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>MB</span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                        Beats <span style={{ color: '#10B981', fontWeight: 600 }}>{submissionResult.beatsMemory}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Distribution Graph */}
+                  {submissionResult.runtimeDistribution && (
+                    <div style={{ height: 160, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 16px 8px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Runtime Distribution</div>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={submissionResult.runtimeDistribution} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} barCategoryGap={1}>
+                          <XAxis dataKey="mark" hide />
+                          <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 8, fontSize: '0.8rem' }} />
+                          <Bar dataKey="count" radius={[2,2,0,0]}>
+                            {submissionResult.runtimeDistribution.map((entry: any, index: number) => {
+                               const val = parseInt(entry.mark);
+                               const userVal = submissionResult.executionTime || 0;
+                               const isUser = Math.abs(val - userVal) <= (Math.max(2, userVal * 0.1)); 
+                               return <Cell key={`cell-${index}`} fill={isUser ? '#3B82F6' : 'rgba(59,130,246,0.3)'} />
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {/* Results cards */}
+                  {problem.testCases?.map((_tc: any, i: number) => (
+                    <div key={i} className="liquid-glass-green" style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                        <div>
                          <div style={{ color: '#10B981', fontSize: '0.85rem', marginBottom: 4, fontWeight: 600 }}>Case {i + 1}</div>
-                         <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime ?? '—'}ms · {submissionResult.memoryUsed ? (submissionResult.memoryUsed / 1024 / 1024).toFixed(1) : '—'} MB</div>
+                         <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime ?? '—'}ms · {submissionResult.memoryUsed ? (submissionResult.memoryUsed).toFixed(1) : '—'} MB</div>
                        </div>
                        <div style={{ color: '#10B981', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -769,7 +879,7 @@ export default function WorkspacePage() {
                 <>
                   <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, padding: '12px 16px' }}>
                     <div style={{ color: '#EF4444', fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>
-                      {submissionResult.status.replace(/_/g, ' ')}
+                      {submissionResult.status?.replace(/_/g, ' ')}
                     </div>
                     {submissionResult.failedCaseId && (
                       <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>Failed on test case {submissionResult.failedCaseId}.</div>
@@ -804,8 +914,149 @@ export default function WorkspacePage() {
       )}
     </div>
   </div>
+);
+
+return (
+  <>{renderResultContent()}</>
+)
+})()}
+  </div>
 </Panel>
+  </>
+)}
 </PanelGroup>
+      </div>
+
+      {/* FLOATING RESULTS PANEL for Custom Layouts */}
+      {((layoutPreset === 'focus' || layoutPreset === 'stacked' || layoutPreset === 'flipped' || layoutPreset === 'leet') && (showRightPanel || isInCollabRoom)) && (
+        <div style={{
+          position: 'fixed', bottom: 16, right: 16, width: '450px', height: '70dvh',
+          zIndex: 999, animation: 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 -20px 60px rgba(0,0,0,0.6)'
+        }}>
+          {/* Close Button for floating panel */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingBottom: 8 }}>
+            <button onClick={() => setShowRightPanel(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', cursor: 'pointer', backdropFilter: 'blur(8px)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          {(() => {
+            const renderFloatingContent = () => (
+              <div className="liquid-glass" style={{ flex: 1, borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <h3 style={{ color: 'var(--color-text-secondary)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em' }}>
+                    {isInCollabRoom ? 'COLLAB SESSION' : submissionResult?.isRun ? 'RUN RESULTS' : 'SUBMISSION RESULTS'}
+                  </h3>
+                  {submissionResult && !isInCollabRoom && (
+                    <span className={`liquid-pill ${submissionResult.status === 'ACCEPTED' ? 'liquid-glass-green' : 'liquid-glass-rose'}`}
+                      style={{ fontSize: '0.7rem', color: submissionResult.status === 'ACCEPTED' ? '#10B981' : '#F43F5E' }}>
+                      {submissionResult.status?.replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
+                
+                <div style={{ flex: 1, padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {isInCollabRoom ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16 }}>
+                      <div style={{ color: '#10B981', fontSize: '1.2rem', textAlign: 'center', fontWeight: 600 }}>
+                        Live Collab is Active
+                      </div>
+                      <button onClick={() => { setIsInCollabRoom(false); setCollabSessionId(''); }} style={{ background: '#EF4444', color: 'white', padding: '10px 20px', borderRadius: 8, border: 'none', fontWeight: 600, cursor: 'pointer', marginTop: 12 }}>
+                        End Session
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {submissionResult ? (
+                        <>
+                          {submissionResult.status === 'ACCEPTED' ? (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+                                <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>Runtime</div>
+                                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                    {submissionResult.executionTime ?? '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
+                                  </div>
+                                </div>
+                                <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>Memory</div>
+                                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                    {submissionResult.memoryUsed ? (submissionResult.memoryUsed).toFixed(1) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>MB</span>
+                                  </div>
+                                </div>
+                              </div>
+                              {submissionResult.runtimeDistribution && (
+                                <div style={{ height: 120, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 16px 8px 16px', marginBottom: 16, display: 'flex', flexDirection: 'column' }}>
+                                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 8 }}>Runtime Distribution</div>
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={submissionResult.runtimeDistribution} margin={{ top: 0, right: 0, left: 0, bottom: 0 }} barCategoryGap={1}>
+                                      <XAxis dataKey="mark" hide />
+                                      <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 8, fontSize: '0.8rem' }} />
+                                      <Bar dataKey="count" radius={[2,2,0,0]}>
+                                        {submissionResult.runtimeDistribution.map((entry: any, index: number) => {
+                                           const val = parseInt(entry.mark);
+                                           const userVal = submissionResult.executionTime || 0;
+                                           const isUser = Math.abs(val - userVal) <= (Math.max(2, userVal * 0.1)); 
+                                           return <Cell key={`cell-${index}`} fill={isUser ? '#3B82F6' : 'rgba(59,130,246,0.3)'} />
+                                        })}
+                                      </Bar>
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              )}
+                              {problem.testCases?.map((_tc: any, i: number) => (
+                                <div key={i} className="liquid-glass-green" style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                   <div>
+                                     <div style={{ color: '#10B981', fontSize: '0.85rem', marginBottom: 4, fontWeight: 600 }}>Case {i + 1}</div>
+                                     <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime ?? '—'}ms</div>
+                                   </div>
+                                   <div style={{ color: '#10B981', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                                     PASS
+                                   </div>
+                                </div>
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, padding: '12px 16px' }}>
+                                <div style={{ color: '#EF4444', fontSize: '1rem', fontWeight: 600, marginBottom: 8 }}>
+                                  {submissionResult.status?.replace(/_/g, ' ')}
+                                </div>
+                                {submissionResult.failedCaseId && (
+                                  <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>Failed on test case {submissionResult.failedCaseId}.</div>
+                                )}
+                                {submissionResult.errorMessage && (
+                                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: 10, borderRadius: 6, color: '#FCA5A5', fontFamily: 'var(--font-code)', fontSize: '0.8rem', marginTop: 8, whiteSpace: 'pre-wrap' }}>
+                                    {submissionResult.errorMessage}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      ) : runState === 'QUEUED' || runState === 'RUNNING' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
+                          <div style={{ width: 24, height: 24, border: '3px solid rgba(96,165,250,0.3)', borderTopColor: '#60A5FA', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                          <div style={{ color: '#60A5FA', fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.05em' }}>{runState === 'QUEUED' ? 'QUEUED...' : 'RUNNING TESTS...'}</div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+            return renderFloatingContent();
+          })()}
+        </div>
+      )}
+      <style>{`
+        @keyframes slideUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
       
       {/* Collab Modal */}
       {collabModalOpen && (
