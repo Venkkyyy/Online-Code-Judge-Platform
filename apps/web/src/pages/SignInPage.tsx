@@ -145,28 +145,31 @@ export default function SignInPage() {
     let mounted = true
 
     const checkRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth)
+  try {
+    const result = await getRedirectResult(auth)
 
-        if (result?.user && mounted) {
-          navigate('/problems', { replace: true })
-        }
-      } catch (err: any) {
-        console.error('Google redirect sign-in error:', err)
+    console.log('🔥 REDIRECT RESULT:', result)
+    console.log('🔥 CURRENT USER:', auth.currentUser)
 
-        if (mounted) {
-          setError(
-            err?.code === 'auth/unauthorized-domain'
-              ? 'This domain is not authorized in Firebase.'
-              : err?.message || 'Google Sign-In failed.'
-          )
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false)
-        }
-      }
+    if (result?.user && mounted) {
+      navigate('/problems', { replace: true })
     }
+  } catch (err: any) {
+    console.error('Google redirect sign-in error:', err)
+
+    if (mounted) {
+      setError(
+        err?.code === 'auth/unauthorized-domain'
+          ? 'This domain is not authorized in Firebase.'
+          : err?.message || 'Google Sign-In failed.'
+      )
+    }
+  } finally {
+    if (mounted) {
+      setIsLoading(false)
+    }
+  }
+}
 
     checkRedirectResult()
 

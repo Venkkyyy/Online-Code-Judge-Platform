@@ -19,12 +19,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      setLoading(false)
-    })
-    return unsubscribe
-  }, [])
+  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    console.log('🔥 AUTH STATE:', currentUser)
+
+    setUser(currentUser)
+    setLoading(false)
+  })
+
+  return unsubscribe
+}, [])
 
   const signOut = async () => {
     try {
