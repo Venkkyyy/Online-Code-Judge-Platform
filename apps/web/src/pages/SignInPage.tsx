@@ -1,10 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
 } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 
@@ -141,42 +140,7 @@ export default function SignInPage() {
 
   const navigate = useNavigate()
 
-  useEffect(() => {
-    let mounted = true
 
-    const checkRedirectResult = async () => {
-  try {
-    const result = await getRedirectResult(auth)
-
-    console.log('🔥 REDIRECT RESULT:', result)
-    console.log('🔥 CURRENT USER:', auth.currentUser)
-
-    if (result?.user && mounted) {
-      navigate('/problems', { replace: true })
-    }
-  } catch (err: any) {
-    console.error('Google redirect sign-in error:', err)
-
-    if (mounted) {
-      setError(
-        err?.code === 'auth/unauthorized-domain'
-          ? 'This domain is not authorized in Firebase.'
-          : err?.message || 'Google Sign-In failed.'
-      )
-    }
-  } finally {
-    if (mounted) {
-      setIsLoading(false)
-    }
-  }
-}
-
-    checkRedirectResult()
-
-    return () => {
-      mounted = false
-    }
-  }, [navigate])
 
   // ADD THIS
   const handleSubmit = async (e: React.FormEvent) => {
@@ -209,11 +173,22 @@ export default function SignInPage() {
         prompt: 'select_account',
       })
 
-      await signInWithRedirect(auth, provider)
+      const result = await signInWithPopup(auth, provider)
+
+      console.log('🔥 GOOGLE USER:', result.user)
+
+      navigate('/problems', { replace: true })
     } catch (err: any) {
       console.error('Google Sign-In error:', err)
 
-      setError(err?.message || 'Google Sign-In failed.')
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setError('Google sign-in was cancelled.')
+      } else if (err?.code === 'auth/popup-blocked') {
+        setError('Your browser blocked the Google sign-in popup. Please allow popups for this site.')
+      } else {
+        setError(err?.message || 'Google Sign-In failed.')
+      }
+    } finally {
       setIsLoading(false)
     }
   }
