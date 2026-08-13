@@ -14,17 +14,17 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/signin" element={<SignInPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/problems" element={<div style={{ color: 'white' }}>PROBLEMS ROUTE WORKS</div>} />
-          <Route path="/problems/:id" element={<WorkspacePage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/problems" element={<ProblemsPage />} />
+        <Route path="/problems/:id" element={<WorkspacePage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </BrowserRouter>
     </AuthProvider>
   )
 }
