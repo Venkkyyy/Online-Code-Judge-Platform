@@ -63,20 +63,45 @@ export default function AdminPage() {
     if (user) {
       user.getIdToken().then(token => {
         // Fetch Stats
-        fetch(`${API_URL}/admin/stats`, { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(res => res.json())
+        fetch(`${API_URL}/admin/stats`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(async res => {
+            const data = await res.json()
+            console.log('ADMIN STATS:', res.status, data)
+            if (!res.ok) throw new Error(`Stats ${res.status}`)
+            return data
+          })
           .then(data => setStats(data))
           .catch(console.error)
 
-        fetch(`${API_URL}/admin/recent-submissions`, { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(res => res.json())
-          .then(data => setRecentSubmissions(data))
+        fetch(`${API_URL}/admin/recent-submissions`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(async res => {
+            const data = await res.json()
+            console.log('ADMIN RECENT:', res.status, data)
+            if (!res.ok) throw new Error(`Recent submissions ${res.status}`)
+            return data
+          })
+          .then(data => {
+            setRecentSubmissions(Array.isArray(data) ? data : [])
+          })
           .catch(console.error)
 
         // Fetch Problems
-        fetch(`${API_URL}/admin/problems`, { headers: { 'Authorization': `Bearer ${token}` } })
-          .then(res => res.json())
-          .then(data => setProblems(data))
+        fetch(`${API_URL}/admin/problems`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(async res => {
+            const data = await res.json()
+            console.log('ADMIN PROBLEMS:', res.status, data)
+            if (!res.ok) throw new Error(`Problems ${res.status}`)
+            return data
+          })
+          .then(data => {
+            setProblems(Array.isArray(data) ? data : [])
+          })
           .catch(console.error)
       })
     }
@@ -232,7 +257,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentSubmissions.map((sub, i) => (
+                  {Array.isArray(recentSubmissions) && recentSubmissions.map((sub, i) => (
                     <tr key={sub.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'white', fontSize: '0.875rem' }}>
                       <td style={{ padding: '14px 24px' }}>{sub.user?.email || 'Anonymous'}</td>
                       <td style={{ padding: '14px 24px', color: '#60A5FA' }}>{sub.problem?.title || `Problem ${sub.problemId}`}</td>
@@ -269,7 +294,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {problems.map((p, i) => (
+                {Array.isArray(problems) && problems.map((p, i) => (
                   <tr key={p.id} className="liquid-glass-hover" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'white', fontSize: '0.875rem', animation: `fadeInUp 0.4s ease both`, animationDelay: `${i * 0.04}s` }}>
                     <td style={{ padding: '14px 24px', color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-code)' }}>{p.id}</td>
                     <td style={{ padding: '14px 24px', fontWeight: 600 }}>{p.title}</td>
