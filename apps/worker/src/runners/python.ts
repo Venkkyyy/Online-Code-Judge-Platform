@@ -1,95 +1,161 @@
 import Docker from 'dockerode';
 import { ExecutionResult } from './index';
 import { Writable } from 'stream';
+import { getDriverCode } from './index';
 
 const docker = new Docker();
 
 export async function runPython(submission: any): Promise<ExecutionResult> {
-  const { code, problem } = submission;
+  let { code, problem } = submission;
+  const template = problem.templates?.python;
+  code += getDriverCode(code, template, 'python');
   const testCases = problem.testCases || [];
-  
+
   if (testCases.length === 0) {
     return { status: 'ACCEPTED', executionTime: 0, memoryUsed: 0 };
   }
 
-  let maxTime = 0;
-  let maxMemory = 0;
-  
-  for (const tc of testCases) {
-    let container: Docker.Container | null = null;
+  let container: Docker.Container | null = null;
+
+  try {
+    const testInputs = testCases.map((tc: any) => tc.input);
+    const testExpected = testCases.map((tc: any) => tc.expectedOutput);
+    const testIds = testCases.map((tc: any) => tc.id);
+
+    const harnessScript = `
+import subprocess, json, sys, os, time, resource
+
+test_inputs = json.loads(open('/work/test_inputs.json').read())
+test_ids = json.loads(open('/work/test_ids.json').read())
+test_expected = json.loads(open('/work/test_expected.json').read())
+
+results = []
+max_time = 0
+max_mem = 0
+
+for i, (inp, expected, tid) in enumerate(zip(test_inputs, test_expected, test_ids)):
+    try:
+        start = time.monotonic()
+        proc = subprocess.run(
+            ['python', '/work/main.py'],
+            input=inp, capture_output=True, text=True, timeout=5,
+            env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}
+        )
+        elapsed_ms = (time.monotonic() - start) * 1000
+        max_time = max(max_time, elapsed_ms)
+        try:
+            mem_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+            max_mem = max(max_mem, mem_kb * 1024)
+        except: pass
+
+        if proc.returncode != 0:
+            results.append({"status": "RUNTIME_ERROR", "id": tid, "error": proc.stderr[:2000]})
+            break
+
+        actual = proc.stdout.strip()
+        if actual != expected:
+            results.append({"status": "WRONG_ANSWER", "id": tid})
+            break
+
+        results.append({"status": "OK"})
+    except subprocess.TimeoutExpired:
+        results.append({"status": "TIME_LIMIT_EXCEEDED", "id": tid})
+        break
+    except Exception as e:
+        results.append({"status": "RUNTIME_ERROR", "id": tid, "error": str(e)[:2000]})
+        break
+
+print(json.dumps({"results": results, "maxTime": max_time, "maxMem": max_mem}))
+`.trim();
+
+    const codeB64 = Buffer.from(code).toString('base64');
+    const harnessB64 = Buffer.from(harnessScript).toString('base64');
+    const inputsB64 = Buffer.from(JSON.stringify(testInputs)).toString('base64');
+    const expectedB64 = Buffer.from(JSON.stringify(testExpected)).toString('base64');
+    const idsB64 = Buffer.from(JSON.stringify(testIds)).toString('base64');
+
+    const cmd = [
+      'sh', '-c',
+      `echo '${codeB64}' | base64 -d > /work/main.py && ` +
+      `echo '${harnessB64}' | base64 -d > /work/harness.py && ` +
+      `echo '${inputsB64}' | base64 -d > /work/test_inputs.json && ` +
+      `echo '${expectedB64}' | base64 -d > /work/test_expected.json && ` +
+      `echo '${idsB64}' | base64 -d > /work/test_ids.json && ` +
+      `timeout 30 python /work/harness.py`
+    ];
+
+    container = await docker.createContainer({
+      Image: 'python:3.11-alpine',
+      Cmd: cmd,
+      User: '1000:1000',
+      HostConfig: {
+        Memory: 256 * 1024 * 1024,
+        MemorySwap: 256 * 1024 * 1024,
+        NetworkMode: 'none',
+        PidsLimit: 64,
+        CapDrop: ['ALL'],
+        SecurityOpt: ['no-new-privileges'],
+        Tmpfs: { '/work': 'size=64m,exec,mode=777' },
+      },
+      StopTimeout: 32,
+    });
+
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    const stdoutStream = new Writable({ write(c, _, cb) { stdoutChunks.push(Buffer.from(c)); cb(); } });
+    const stderrStream = new Writable({ write(c, _, cb) { stderrChunks.push(Buffer.from(c)); cb(); } });
+
+    const stream = await container.attach({ stream: true, stdout: true, stderr: true });
+    docker.modem.demuxStream(stream, stdoutStream, stderrStream);
+
+    await container.start();
+
+    const waitRes: any = await Promise.race([
+      container.wait(),
+      new Promise(r => setTimeout(() => r('TIMEOUT'), 35000))
+    ]);
+
+    if (waitRes === 'TIMEOUT') {
+      await container.stop().catch(() => {});
+      return { status: 'TIME_LIMIT_EXCEEDED', failedCaseId: testCases[0]?.id, executionTime: 0, memoryUsed: 0 };
+    }
+
+    const stdoutText = Buffer.concat(stdoutChunks).toString('utf-8').trim();
+    const stderrText = Buffer.concat(stderrChunks).toString('utf-8').replace(/[^\x20-\x7E\n]/g, '').trim();
+
     try {
-      const runCmd = [
-        'sh', '-c',
-        `printf '%s' '${(tc.input || '').replace(/'/g, "'\\''")}' > /work/input.txt && ` +
-        `echo '${code.replace(/'/g, "'\\''")}' > /work/main.py && ` +
-        `timeout 5 python /work/main.py < /work/input.txt`
-      ];
+      const output = JSON.parse(stdoutText);
+      const results: any[] = output.results;
+      const maxTime = output.maxTime || 0;
+      const maxMem = output.maxMem || 0;
 
-      container = await docker.createContainer({
-        Image: 'python:3.11-alpine',
-        Cmd: runCmd,
-        User: '1000:1000',
-        HostConfig: {
-          Memory: 256 * 1024 * 1024,
-          MemorySwap: 256 * 1024 * 1024,
-          NetworkMode: 'none',
-          PidsLimit: 64,
-          CapDrop: ['ALL'],
-          SecurityOpt: ['no-new-privileges'],
-          Tmpfs: { '/work': 'size=64m,exec,mode=777' },
-        },
-        StopTimeout: 5,
-      });
-
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
-      const stdout = new Writable({ write(c, _, cb) { stdoutChunks.push(Buffer.from(c)); cb(); } });
-      const stderr = new Writable({ write(c, _, cb) { stderrChunks.push(Buffer.from(c)); cb(); } });
-
-      const stream = await container.attach({ stream: true, stdout: true, stderr: true });
-      docker.modem.demuxStream(stream, stdout, stderr);
-      
-      const startMs = Date.now();
-      await container.start();
-      
-      const waitRes: any = await Promise.race([
-        container.wait(),
-        new Promise(r => setTimeout(() => r('TIMEOUT'), 6000))
-      ]);
-      
-      const elapsedMs = Date.now() - startMs;
-
-      if (waitRes === 'TIMEOUT') {
-        await container.stop().catch(() => {});
-        return { status: 'TIME_LIMIT_EXCEEDED', failedCaseId: tc.id, executionTime: maxTime, memoryUsed: maxMemory };
+      for (const r of results) {
+        if (r.status === 'WRONG_ANSWER') {
+          return { status: 'WRONG_ANSWER', failedCaseId: r.id, executionTime: maxTime, memoryUsed: maxMem };
+        }
+        if (r.status === 'TIME_LIMIT_EXCEEDED') {
+          return { status: 'TIME_LIMIT_EXCEEDED', failedCaseId: r.id, executionTime: maxTime, memoryUsed: maxMem };
+        }
+        if (r.status === 'RUNTIME_ERROR') {
+          return { status: 'RUNTIME_ERROR', failedCaseId: r.id, errorMessage: r.error, executionTime: maxTime, memoryUsed: maxMem };
+        }
       }
 
-      const stdoutText = Buffer.concat(stdoutChunks).toString('utf-8').trim();
-      const stderrText = Buffer.concat(stderrChunks).toString('utf-8').replace(/[^\x20-\x7E\n]/g, '').trim();
-
-      if (waitRes.StatusCode === 124) {
-        return { status: 'TIME_LIMIT_EXCEEDED', failedCaseId: tc.id, executionTime: maxTime, memoryUsed: maxMemory };
+      return { status: 'ACCEPTED', executionTime: maxTime, memoryUsed: maxMem };
+    } catch (err) {
+      if (stderrText && (stderrText.includes('error:') || stderrText.includes('Error'))) {
+        return { status: 'COMPILATION_ERROR', errorMessage: stderrText.slice(0, 2000) };
       }
-
-      if (waitRes.StatusCode !== 0) {
-        return { status: 'RUNTIME_ERROR', failedCaseId: tc.id, errorMessage: stderrText, executionTime: maxTime, memoryUsed: maxMemory };
-      }
-
-      maxTime = Math.max(maxTime, elapsedMs);
-      maxMemory = Math.max(maxMemory, 32 * 1024 * 1024); // Fallback estimate since no /usr/bin/time on alpine
-
-      const actual = stdoutText.trim();
-      const expected = (tc.expectedOutput || '').trim();
-
-      if (actual !== expected) {
-        return { status: 'WRONG_ANSWER', failedCaseId: tc.id, executionTime: maxTime, memoryUsed: maxMemory };
-      }
-    } catch (err: any) {
-      return { status: 'INTERNAL_ERROR', errorMessage: err.message };
-    } finally {
-      if (container) await container.remove({ force: true }).catch(() => {});
+      return { status: 'RUNTIME_ERROR', errorMessage: stderrText || stdoutText || 'Failed to parse results', executionTime: 0, memoryUsed: 0 };
+    }
+  } catch (error: any) {
+    console.error('Python runner error:', error);
+    return { status: 'RUNTIME_ERROR', errorMessage: error.message || 'Execution failed' };
+  } finally {
+    if (container) {
+      try {
+        await container.remove({ force: true });
+      } catch (e) {}
     }
   }
-
-  return { status: 'ACCEPTED', executionTime: maxTime, memoryUsed: maxMemory };
 }

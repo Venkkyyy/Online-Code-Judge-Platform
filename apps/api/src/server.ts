@@ -132,6 +132,21 @@ async function createJudgement(req: any, res: express.Response, mode: 'RUN' | 'S
   }
 }
 
+// ── Public Stats ────────────────────────────────────────────────────────────
+router.get('/stats', async (req, res) => {
+  try {
+    const [problems, submissions, users] = await Promise.all([
+      prisma.problem.count({ where: { published: true } }),
+      prisma.submission.count({ where: { isRun: false } }),
+      prisma.user.count(),
+    ]);
+    res.json({ problems, submissions, users, languages: 4 });
+  } catch (error) {
+    console.error('Failed to fetch stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/problems', async (req, res) => {
   try {
     const problems = await prisma.problem.findMany({

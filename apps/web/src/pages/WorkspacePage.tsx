@@ -431,7 +431,8 @@ export default function WorkspacePage() {
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      const res = await fetch(`${API_URL}/submissions`, {
+      const endpoint = action === 'RUN' ? 'runs' : 'submissions'
+      const res = await fetch(`${API_URL}/${endpoint}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -680,7 +681,7 @@ export default function WorkspacePage() {
                             {sub.status?.replace(/_/g, ' ')}
                           </td>
                           <td style={{ padding: '10px 0', color: 'var(--color-text-secondary)' }}>
-                            {sub.executionTime != null ? `${sub.executionTime}ms` : 'N/A'}
+                            {sub.executionTime != null ? `${Math.round(sub.executionTime)}ms` : 'N/A'}
                           </td>
                           <td style={{ padding: '10px 0', color: 'var(--color-text-secondary)' }}>
                             {sub.memoryUsed != null ? `${(sub.memoryUsed / 1024 / 1024).toFixed(1)}MB` : 'N/A'}
@@ -812,7 +813,7 @@ const renderResultContent = () => (
                         Runtime
                       </div>
                       <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        {submissionResult.executionTime ?? '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
+                        {submissionResult.executionTime != null ? Math.round(submissionResult.executionTime) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: 4 }}>
                         Beats <span style={{ color: '#10B981', fontWeight: 600 }}>{submissionResult.beatsRuntime}%</span>
@@ -858,7 +859,7 @@ const renderResultContent = () => (
                     <div key={i} className="liquid-glass-green" style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                        <div>
                          <div style={{ color: '#10B981', fontSize: '0.85rem', marginBottom: 4, fontWeight: 600 }}>Case {i + 1}</div>
-                         <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime ?? '—'}ms · {submissionResult.memoryUsed ? (submissionResult.memoryUsed).toFixed(1) : '—'} MB</div>
+                         <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime != null ? Math.round(submissionResult.executionTime) : '—'}ms • {submissionResult.memoryUsed ? (submissionResult.memoryUsed / 1024 / 1024).toFixed(1) : '—'} MB</div>
                        </div>
                        <div style={{ color: '#10B981', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -976,13 +977,13 @@ return (
                                 <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>Runtime</div>
                                   <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                    {submissionResult.executionTime ?? '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
+                                    {submissionResult.executionTime != null ? Math.round(submissionResult.executionTime) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>ms</span>
                                   </div>
                                 </div>
                                 <div style={{ flex: 1, padding: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-tertiary)', fontSize: '0.8rem', fontWeight: 600, marginBottom: 4 }}>Memory</div>
                                   <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                                    {submissionResult.memoryUsed ? (submissionResult.memoryUsed).toFixed(1) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>MB</span>
+                                    {submissionResult.memoryUsed ? (submissionResult.memoryUsed / 1024 / 1024).toFixed(1) : '—'} <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', fontWeight: 500 }}>MB</span>
                                   </div>
                                 </div>
                               </div>
@@ -1009,7 +1010,7 @@ return (
                                 <div key={i} className="liquid-glass-green" style={{ borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                                    <div>
                                      <div style={{ color: '#10B981', fontSize: '0.85rem', marginBottom: 4, fontWeight: 600 }}>Case {i + 1}</div>
-                                     <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime ?? '—'}ms</div>
+                                     <div style={{ color: 'rgba(110,231,183,0.7)', fontSize: '0.75rem' }}>{submissionResult.executionTime != null ? Math.round(submissionResult.executionTime) : '—'}ms</div>
                                    </div>
                                    <div style={{ color: '#10B981', fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>

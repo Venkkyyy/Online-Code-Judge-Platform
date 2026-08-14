@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ensureImagePulled = ensureImagePulled;
+exports.getDriverCode = getDriverCode;
 exports.executeCode = executeCode;
 const python_1 = require("./python");
 const javascript_1 = require("./javascript");
@@ -23,7 +24,6 @@ async function ensureDockerAvailable() {
 }
 async function ensureImagePulled(image) {
     try {
-        // Check if the image is already downloaded
         const images = await docker.listImages();
         if (images.some(img => img.RepoTags?.includes(image)))
             return;
@@ -46,6 +46,17 @@ async function ensureImagePulled(image) {
     catch (err) {
         console.error(`[Worker] Failed to pull image ${image}:`, err.message);
     }
+}
+function getDriverCode(code, template, language) {
+    if (!template)
+        return '';
+    const marker = language === 'python'
+        ? '# DO NOT EDIT BELOW THIS LINE'
+        : '// DO NOT EDIT BELOW THIS LINE';
+    if (code.includes(marker))
+        return '';
+    const parts = template.split(marker);
+    return parts.length > 1 ? '\n' + marker + parts[1] : '';
 }
 async function executeCode(submission) {
     if (!(await ensureDockerAvailable())) {

@@ -268,7 +268,7 @@ function ProblemRow({ id, title, difficulty, tags, acceptanceRate }: {
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 function Navbar() {
-  const { user, signOut } = useAuth()
+  const { user, loading, signOut } = useAuth()
   const [scrolled, setScrolled] = useState(false)
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 20)
@@ -293,7 +293,7 @@ function Navbar() {
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {user ? (
+          {loading ? null : user ? (
             <>
               <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginRight: 8 }}>
                 {user.displayName || user.email}
@@ -566,6 +566,15 @@ export default function LandingPage() {
   const [exampleIdx, setExampleIdx] = useState(0)
   const [heroState, setHeroState] = useState<'typing' | 'moving' | 'submitting' | 'done' | 'fading'>('typing')
   const [showResult, setShowResult] = useState(false)
+  const [platformStats, setPlatformStats] = useState<{ problems: number; submissions: number; users: number; languages: number } | null>(null)
+
+  useEffect(() => {
+    const apiUrl = (import.meta.env.VITE_API_URL || '/api/v1')
+    fetch(`${apiUrl}/stats`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setPlatformStats(data) })
+      .catch(() => {})
+  }, [])
 
   const currentExample = CODE_EXAMPLES[exampleIdx]
 
@@ -626,7 +635,7 @@ export default function LandingPage() {
               </h1>
 
               <p style={{ fontSize: '1.125rem', lineHeight: 1.8, maxWidth: 460, marginBottom: 'var(--space-8)', color: '#94A3B8' }}>
-                A developer-focused judge platform with secure sandboxed execution, real-time feedback, and a clean workspace built for focused problem solving.
+                Solve algorithmic challenges in Python, JavaScript, C++, and Java with secure sandboxed execution, real-time verdicts, and a workspace built for focused problem solving.
               </p>
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 'var(--space-10)' }}>
@@ -781,10 +790,10 @@ export default function LandingPage() {
       <section style={{ borderTop: '1px solid rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.08)', background: 'linear-gradient(180deg,rgba(59,130,246,0.03) 0%,transparent 100%)', padding: 'var(--space-12) 0', position: 'relative', zIndex: 1 }}>
         <div className="container">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 'var(--space-4)' }}>
-            <AnimatedStat end={500} suffix="+" label="Problems curated" color="#3B82F6" />
-            <AnimatedStat end={4} suffix="" label="Languages supported" color="#14B8A6" />
-            <AnimatedStat end={60} suffix="s" label="Max submission budget" color="#8B5CF6" />
-            <AnimatedStat end={99} suffix=".5%" label="API uptime target" color="#F59E0B" />
+            <AnimatedStat end={platformStats?.problems ?? 0} suffix="" label="Problems curated" color="#3B82F6" />
+            <AnimatedStat end={platformStats?.languages ?? 4} suffix="" label="Languages supported" color="#14B8A6" />
+            <AnimatedStat end={platformStats?.submissions ?? 0} suffix="" label="Total submissions" color="#8B5CF6" />
+            <AnimatedStat end={platformStats?.users ?? 0} suffix="" label="Registered developers" color="#F59E0B" />
           </div>
         </div>
       </section>
@@ -799,6 +808,31 @@ export default function LandingPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 'var(--space-5)' }}>
             {FEATURES.map((f, i) => <FeatureCard key={f.title} {...f} delay={i * 80} />)}
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ──────────────────────────────────────────────────── */}
+      <section style={{ padding: 'var(--space-16) 0', borderTop: '1px solid var(--color-border-subtle)', position: 'relative', zIndex: 1 }}>
+        <div className="container" style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ textAlign: 'center', marginBottom: 'var(--space-12)' }}>
+            <div style={{ display: 'inline-block', padding: '4px 14px', background: 'rgba(20,184,166,0.08)', border: '1px solid rgba(20,184,166,0.18)', borderRadius: 'var(--radius-full)', fontSize: '0.75rem', fontWeight: 700, color: '#14B8A6', marginBottom: 'var(--space-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>How It Works</div>
+            <h2 style={{ marginBottom: 'var(--space-4)' }}>Four steps to <span style={{ background: 'linear-gradient(135deg,#14B8A6,#60A5FA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>better code</span></h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 'var(--space-6)' }}>
+            {[
+              { step: '01', title: 'Pick a Problem', desc: 'Browse curated algorithmic challenges sorted by difficulty — easy, medium, and hard.', icon: '📋' },
+              { step: '02', title: 'Write & Run', desc: 'Code in the Monaco Editor with syntax highlighting, then test against sample cases instantly.', icon: '⚡' },
+              { step: '03', title: 'Submit', desc: 'Run your solution against all test cases including hidden ones in a secure sandbox.', icon: '🚀' },
+              { step: '04', title: 'Improve', desc: 'See detailed verdicts, runtime stats, and track your progress across problems.', icon: '📈' },
+            ].map((item, i) => (
+              <div key={item.step} className="animate-fade-in" style={{ animationDelay: `${i * 100}ms`, animationFillMode: 'both', textAlign: 'center', padding: 'var(--space-6)', background: 'var(--color-surface-1)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xl)', position: 'relative' }}>
+                <div style={{ fontSize: '2rem', marginBottom: 'var(--space-3)' }}>{item.icon}</div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#3B82F6', letterSpacing: '0.12em', marginBottom: 'var(--space-2)', fontFamily: 'var(--font-code)' }}>STEP {item.step}</div>
+                <h3 style={{ fontSize: '1rem', marginBottom: 'var(--space-2)', fontWeight: 700 }}>{item.title}</h3>
+                <p style={{ fontSize: '0.875rem', lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: 0 }}>{item.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>

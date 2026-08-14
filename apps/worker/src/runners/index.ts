@@ -26,10 +26,9 @@ async function ensureDockerAvailable() {
 
 export async function ensureImagePulled(image: string) {
   try {
-    // Check if the image is already downloaded
     const images = await docker.listImages();
     if (images.some(img => img.RepoTags?.includes(image))) return;
-    
+
     console.log(`[Worker] Pulling image ${image}, this might take a minute...`);
     await new Promise((resolve, reject) => {
       docker.pull(image, (err: any, stream: any) => {
@@ -46,6 +45,16 @@ export async function ensureImagePulled(image: string) {
   } catch (err: any) {
     console.error(`[Worker] Failed to pull image ${image}:`, err.message);
   }
+}
+
+export function getDriverCode(code: string, template: string | undefined, language: string): string {
+  if (!template) return '';
+  const marker = language === 'python' 
+    ? '# DO NOT EDIT BELOW THIS LINE' 
+    : '// DO NOT EDIT BELOW THIS LINE';
+  if (code.includes(marker)) return '';
+  const parts = template.split(marker);
+  return parts.length > 1 ? '\n' + marker + parts[1] : '';
 }
 
 export async function executeCode(submission: any): Promise<ExecutionResult> {

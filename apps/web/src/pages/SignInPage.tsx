@@ -138,11 +138,9 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
+
   const navigate = useNavigate()
 
-
-
-  // ADD THIS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)

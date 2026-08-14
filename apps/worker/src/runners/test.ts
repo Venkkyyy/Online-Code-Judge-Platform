@@ -1,0 +1,1 @@
+import { runPython } from './python'; runPython({ code: 'print(1)', problem: { testCases: [{ input: '1', expectedOutput: '1', id: 1 }], templates: { python: '' } } }).then(console.log);
